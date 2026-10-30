@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ==================== 蓝牙：Android 11 及以下 ==================== -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- ==================== 蓝牙：Android 12 (API 31) 及以上 ==================== -->
+    <!--
+      neverForLocation：声明本APP 不借助蓝牙推导地理位置。
+      不加这一句时，系统会连带要求 ACCESS_FINE_LOCATION，
+      导致运行时权限申请被系统拒绝，表现为"扫不到设备且没有权限提示"。
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
+        tools:targetApi="s" />
+
+    <!-- ==================== 应用可见性（悬浮「打开导航软件」的应用选择器，
+         Android 11+ 不声明 queries 就只能看到系统应用，看不到高德等第三方） ==================== -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!-- ==================== 悬浮窗（悬浮胎压信息框） ==================== -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- ==================== 定位权限 ====================
+         1) Android 11 及以下：BLE 扫描强制要求
+         2) 实时页的 GPS 速度需要（不限 sdk 版本）-->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- ==================== 告警通知（Android 13+ 需要运行时授权，可选） ==================== -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ==================== 震动 ==================== -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="true" />
+
+    <application
+        android:name=".YybmsApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.YYBMS">
+
+        <activity
+            android:name=".ui.main.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/title_settings"
+            android:parentActivityName=".ui.main.MainActivity" />
+
+        <!--
+          ⚠️ 诊断页只读展示本机自有数据、不含任何凭据，
+          但仍按最小暴露面原则保持 exported=false（只能从设置页进入）。
+        -->
+        <activity
+            android:name=".ui.diag.DiagActivity"
+            android:exported="false"
+            android:label="@string/diag_title"
+            android:parentActivityName=".ui.settings.SettingsActivity" />
+            <service
+            android:name=".ui.overlay.TpmsOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+    </application>
+
+</manifest>

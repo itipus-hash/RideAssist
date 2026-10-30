@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- ⭐ 标题居中（titleCentered）；关闭按钮放**右上角**菜单位（用户要求），
+         不再用左侧 navigationIcon —— 左侧关闭是「返回」语义，右上角才是「关闭」语义 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        app:titleCentered="true"
+        app:title="@string/diag_title" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <!-- ============ 连接设置（自设置页迁入，放最上面，用户要求） ============ -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        style="@style/CardTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/setting_connection" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_diag_auto_connect"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/setting_auto_connect"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/tv_diag_saved_device"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ============ BMS 报警（自设置页迁入并改名，用户要求） ============ -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        style="@style/CardTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/bms_alarm_title" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_diag_vibrate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/bms_alarm_vibrate"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_diag_dialog"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/bms_alarm_dialog"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+<!-- 设备实况 -->
+       <com.google.android.material.card.MaterialCardView
+         style="@style/DiagCard">
+
+    <TextView
+    style="@style/DiagText"
+    android:id="@+id/tv_device" />
+      </com.google.android.material.card.MaterialCardView>
+
+<!-- 本机设备身份：读不到的项不显示 -->
+<!-- ⚠️ 用 LinearLayout 当「隐形表格」容器，不用 TextView 拼空格：
+实机 monospace 字体里 ─ │ 等制表符并非等宽，画线会断成虚线 -->
+     <com.google.android.material.card.MaterialCardView
+            style="@style/DiagCard">
+
+        <LinearLayout
+  style="@style/DiagTable">
+
+     <TextView
+   style="@style/DiagText"
+android:text="设备信息" />
+
+            <LinearLayout
+      android:id="@+id/ll_identity"
+     android:layout_width="match_parent"
+           android:layout_height="wrap_content"
+  android:orientation="vertical" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+            <!-- ① 原始累加器 -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <TextView
+                    style="@style/DiagText"
+                    android:id="@+id/tv_accumulators" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ② 预计里程分解：分子分母并排（本面板核心） -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <TextView
+                    style="@style/DiagText"
+                    android:id="@+id/tv_range_breakdown" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ③ 移动判定 -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <TextView
+                    style="@style/DiagText"
+                    android:id="@+id/tv_move_gate" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 门控对照表（静态） -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <TextView
+                    style="@style/DiagText"
+                    android:id="@+id/tv_gate_table" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ④ 派生指标 -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <TextView
+                    style="@style/DiagText"
+                    android:id="@+id/tv_derived" />
+            </com.google.android.material.card.MaterialCardView>
+
+<!-- ⑤ 告警诊断 -->
+        <!-- ⚠️ 表格容器 ll_alarms 与结论文本 tv_alarms 必须是**兄弟**：
+        表格靠 removeAllViews 重建，若把 TextView 放进表格容器会被一起清掉 -->
+        <com.google.android.material.card.MaterialCardView
+style="@style/DiagCard">
+
+       <LinearLayout
+       style="@style/DiagTable">
+
+    <LinearLayout
+            android:id="@+id/ll_alarms"
+   android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+ android:orientation="vertical" />
+
+      <TextView
+             style="@style/DiagText"
+ android:id="@+id/tv_alarms" />
+         </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+            <!-- ⑥ 保护参数 -->
+            <com.google.android.material.card.MaterialCardView
+       style="@style/DiagCard">
+
+  <LinearLayout
+      style="@style/DiagTable">
+
+    <LinearLayout
+        android:id="@+id/ll_anchors"
+      android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+      android:orientation="vertical" />
+    </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="24dp"
+                android:text="@string/diag_reset" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

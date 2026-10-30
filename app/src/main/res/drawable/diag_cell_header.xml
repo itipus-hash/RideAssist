@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 表头单元格：淡色底 + 边框，和数据行区分开 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/diag_table_head" />
+    <stroke
+        android:width="1px"
+        android:color="@color/diag_table_line" />
+</shape>

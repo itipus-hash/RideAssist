@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="48dp"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp">
+
+    <TextView
+        android:id="@+id/tv_index"
+        android:layout_width="34dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        tools:text="1" />
+
+    <TextView
+        android:id="@+id/tv_voltage"
+        android:layout_width="72dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_primary"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        tools:text="4.180" />
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="8dp"
+        android:layout_weight="1"
+        android:max="100"
+        app:indicatorColor="@color/primary"
+        app:trackCornerRadius="2dp"
+        app:trackThickness="6dp"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        tools:progress="70" />
+
+    <TextView
+        android:id="@+id/tv_diff"
+        android:layout_width="64dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        tools:text="基准" />
+</LinearLayout>

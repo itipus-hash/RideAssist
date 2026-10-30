@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主题色：工业蓝，克制不刺眼 -->
+    <color name="primary">#1565C0</color>
+    <color name="primary_dark">#0D47A1</color>
+
+    <!-- 文字 -->
+    <color name="text_primary">#1A1C1E</color>
+    <color name="text_secondary">#5F6368</color>
+    <color name="text_tertiary">#9AA0A6</color>
+
+    <!-- 连接状态 -->
+    <color name="state_disconnected">#9AA0A6</color>
+    <color name="state_connecting">#F9A825</color>
+    <color name="state_connected">#2E7D32</color>
+    <color name="state_failed">#C62828</color>
+
+    <!-- 充放电：充电绿、放电橙，语义直观 -->
+    <!-- 充电=绿（能量流入），放电=红（能量流出），按用户习惯 -->
+    <color name="state_charging">#2E7D32</color>
+    <color name="state_discharging">#D32F2F</color>
+
+    <!-- 异常标红 -->
+    <color name="abnormal">#C62828</color>
+
+    <!-- 曲线 -->
+    <color name="chart_soc">#1565C0</color>
+    <color name="chart_voltage">#2E7D32</color>
+    <color name="chart_current">#EF6C00</color>
+    <color name="chart_grid">#E0E0E0</color>
+
+    <color name="background">#F5F6F8</color>
+    <color name="surface">#FFFFFF</color>
+
+    <!-- 诊断面板「隐形表格」：格子线与表头底色。
+         刻意做得很淡，表格是给人看数据的，不该抢内容的视觉权重 -->
+    <color name="diag_table_line">#E3E6EA</color>
+    <color name="diag_table_head">#F4F6F8</color>
+</resources>

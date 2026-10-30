@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  隐形表格的单元格边框。
+
+  ⚠️ 为什么不用 ─ │ 字符画线：
+  实机 monospace 字体里这两个字符并非等宽，画出来横线断成虚线、竖线接不上。
+  用 shape 的 stroke 画线则由 layout 绘制，与字体完全无关，永远对齐。
+
+  上下左右各留1px 让相邻单元格的双线重合成单线（避免 2dp 粗线）。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="1px"
+ android:color="@color/diag_table_line" />
+</shape>

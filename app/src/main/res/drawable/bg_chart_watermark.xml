@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  曲线卡上「水印」数值的底衬。
+
+  为什么需要它：94sp 的水印文字用 alpha=0.40 直接叠在曲线上，
+  而曲线是 4px 的**实色**描边（strokeWidth=4），会直接穿透数字笔画，
+  视觉上像数字被切断、糊成一团（用户反馈"看不清"）。
+
+  方案：给水印加一层**半透明白色圆角底**（alpha 0.45），
+  把曲线压下去的同时仍隐约可见轮廓，既保证数字清晰，
+  又不破坏"水印叠在曲线上"的视觉关系。
+
+  ⚠️ alpha **不能给满**（实测 0xB8≈0.72 时曲线被完全盖死，
+  只剩一条直线，实时走势信息全丢）。0.45 是「数字清晰 + 曲线可辨」的平衡点：
+  曲线穿过数字区域时被压淡但仍能看出走向。
+
+  实机验证：alpha 0.72 → 曲线完全不可见；0.45 → 数字笔画干净，曲线隐约透出。
+  -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#73FFFFFF" />
+    <corners android:radius="14dp" />
+</shape>

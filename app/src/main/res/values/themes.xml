@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.YYBMS" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimary</item>
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+
+    <!-- 卡片标题 -->
+    <style name="CardTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <!-- 指标块容器 -->
+    <style name="MetricContainer">
+        <item name="android:orientation">vertical</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+    </style>
+
+    <!-- 指标名 -->
+    <style name="MetricLabel">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
+    <!-- 指标值 -->
+    <style name="MetricValue">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:layout_marginTop">2dp</item>
+    </style>
+
+    <!--
+      指标单位（⭐ 用户要求：单位放数值**下面**）
+      独立成行而非拼进标签/数值后面：
+      1) 标签保持纯中文，读起来干净
+      2) 三列宽度有限，单位独立成行不会被长数值挤到换行
+      字号比数值小、透明度更低 —— 符合「标签/数值是主体，单位是注脚」的层级
+    -->
+    <style name="MetricUnit">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:alpha">0.85</item>
+    </style>
+
+    <!-- 峰值记录的一行 -->
+    <style name="PeakRow">
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingTop">7dp</item>
+        <item name="android:paddingBottom">7dp</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <!-- 峰值行的标题（例：最高速度 60 km/h） -->
+    <style name="PeakRowTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- 峰值行最左侧的项目名称（最高速度 / 最高功率 / …） -->
+    <style name="PeakRowName">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- 峰值行右侧的时刻 -->
+    <style name="PeakRowTime">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text_tertiary</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <!-- 压差详情的三行补充信息 -->
+    <style name="PeakRowDetail">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <!-- ⭐ 曲线卡上居中悬浮的「水印」：当前值大字 + 数值右下角的小号单位。
+
+         ⚠️ 容器用 **ConstraintLayout**：
+         - 宽度必须 **match_parent**。若为 wrap_content，ConstraintLayout 会把
+           「数值+单位」当成一个整体去居中，数值被单位挤得偏左。
+         - ⚠️ 高度也必须 **match_parent**。若为 wrap_content，容器高度 == 数值高度，
+           此时给数值加 `bottom_toBottomOf=parent` 会形成「约束循环」，**垂直居中失效**。
+           撑满外层 110dp 的 FrameLayout 后，top/bottom 双约束才成立真正的垂直居中。
+
+         ⚠️ 数值与单位必须是**兄弟 TextView**，不能拼在同一个 TextView 里——
+         拼一起就没法让单位用更小字号。
+
+         ⭐ 底衬 `bg_chart_watermark` 是清晰度的关键：曲线是 4px 实色描边，
+         会直接穿透 94sp 文字的笔画（用户反馈"水印看不清"）。
+         半透明白底把曲线压下去，数字轮廓才干净；alpha 不能给满，
+         不透明会变成突兀白块，反而丢失实时走势。
+
+         ⚠️ padding 只能是 2dp：94sp 文字行高约 100dp，曲线区110dp，
+         上下 padding 各 6dp 就变成 112dp 而溢出。
+         而曲线区高度又不能超过 110dp —— 四张卡片总高超出首屏时，
+         最下面的压差卡片会被底部导航栏遮住显示不全。 -->
+    <style name="ChartWatermark">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">@drawable/bg_chart_watermark</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:paddingTop">2dp</item>
+        <item name="android:paddingBottom">2dp</item>
+    </style>
+
+    <!-- 水印里的数值部分（78sp × 1.2 = 94sp）
+
+         ⚠️ 抵消「视觉偏下」：数字字形没有降部（字母 g/y/p 才往下伸），
+         字面框下半部分留白明显多于上半部分。布局层面数值已是精确居中，
+         但眼睛会把字面框中心当成数字中心，于是视觉上觉得数字偏下。
+         用 translationY 向上提 6dp 抵消这个偏差。
+
+         alpha 从 0.40 提到 0.72：有底衬后已不再被曲线穿透，
+         可以加深以保证可读性，同时仍保留"水印"的轻盈感。 -->
+    <style name="ChartWatermarkValue">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">94sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:translationY">-6dp</item>
+        <item name="android:alpha">0.72</item>
+    </style>
+
+    <!-- 水印里的单位部分：明显小于数值，挂在数值右下角。
+
+         ⚠️ marginBottom 有两层作用，别当成「对齐误差修正」：
+         ① 约束对齐的是**文本框**底边，数字字形底部到文本框底边还有一段余量；
+         ② 「小单位 + 底部对齐」在视觉上比中线对齐更低。
+         20dp 让单位下沿与数字字形下沿基本齐平。 -->
+    <style name="ChartWatermarkUnit">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">3dp</item>
+        <item name="android:layout_marginBottom">20dp</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:alpha">0.72</item>
+    </style>
+
+    <!-- 诊断面板的卡片容器：与其他卡同构，靠 padding 内的等宽文本呈现 -->
+    <style name="DiagCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">12dp</item>
+        <item name="android:padding">14dp</item>
+    </style>
+
+<!--
+      诊断面板正文：**必须用等宽字体**。
+      数值列要上下对齐才能逐行比对，「分子/分母/结果」三行才看得出关系。
+      等宽是这个面板唯一不可让步的排版要求。
+    -->
+    <style name="DiagText">
+     <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+   <item name="android:fontFamily">monospace</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:lineSpacingMultiplier">1.25</item>
+    </style>
+
+    <!--
+      「隐形表格」容器：告警/保护参数/设备信息三块共用。
+
+      ⚠️ 为什么不用 TextView 补空格、也不用 ─ │ 画线：
+      1. 补空格依赖 monospace 字体 + 字符宽度函数完全正确，`℃` `°` 一错就整列歪；
+      2. 实机字体里 ─ │ 并非等宽字符，画出来横线断成虚线、竖线接不上。
+      改用真控件做格子 —— 每行一个 LinearLayout，每个单元格一个 TextView，
+      列宽按各列最大内容宽度按比例分配（weight），**列位由 layout 保证**，不靠猜。
+    -->
+    <style name="DiagTable">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <!-- 隐形表格的单元格：字体必须与 DiagText 一致，否则行高会跳 -->
+    <style name="DiagCell">
+      <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+     <item name="android:includeFontPadding">false</item>
+        <item name="android:paddingTop">1dp</item>
+        <item name="android:paddingBottom">1dp</item>
+ </style>
+</resources>

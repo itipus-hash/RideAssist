@@ -1,0 +1,554 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ⚠️⭐ XML 注释里**不能出现连续的英文双连字符**（会被当成注释结束符），
+     资源 merger 会直接报 parse 错误。用中文引号或描述性文字代替。
+
+  底部「数据」页：本次骑行的汇总统计。
+
+  ⭐⭐ **单位统一放在数值下方**（用户明确要求："单位放下面，谁让你放上面了"）。
+  用 MetricContainer（column 布局）+ 独立的小字单位 TextView，
+  而不是把单位拼进标签或数值后面 ——
+  1) 标签保持纯中文（骑行均速 / 百公里耗能），读起来干净
+  2) 单位小字更弱，符合「标签/数值是主体，单位是注脚」的视觉层级
+  3) 三列宽度有限，单位独立成行不会被长数值挤到换行
+
+  ⚠️ 二行三列用 LinearLayout(horizontal) + weight 三等分，
+     不用 GridLayout（嵌套权重在 NestedScrollView 里易出错）。
+-->
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp">
+
+        <!-- ============ 当前时间 ============
+             与首页时间卡同构（100dp 高 / 44sp / primary 色 / 居中），
+             不带标题，只显示 HH:MM 本身。
+             ⚠️ 本页首卡不加 marginTop（外层已有 14dp padding），
+             下方的骑行数据卡相应补 12dp，避免紧贴。 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <TextView
+                android:id="@+id/tv_current_time"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.04"
+                android:textColor="@color/primary"
+                android:textSize="44sp"
+                tools:text="20:58" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 骑行数据：二行三列============ -->
+        <!-- ⚠️ 上方新增时间卡后补 12dp marginTop，否则与时间卡紧贴 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ride_page_title" />
+
+                <!-- 第一行：本次里程预估 / 预计可行驶里程
+                     ⚠️⭐ 分栏必须与下面两行**完全一致的三等分**（weight=1 ×3），
+                     只用两列（weight=1 ×2）会让第二列起点落在 50% 处，
+                     而下面「行程用时」在 33% 处 —— 视觉上对不齐。
+                     所以第一行同样按三等分切，第三格留空：
+                       格1 本次里程预估
+                       格2 预计可行驶里程
+                       格3 （空）
+                     这样「预计可行驶里程」正好压在「行程用时」上方。
+
+                     ⚠️ 结构与其余指标一致（标签在上、数值在下、单位同行）——
+                     之前用「标签 + 数值同一行右侧对齐」，数值被推到卡片最右端、
+                     离标签很远，读起来不像一组。已改为与其余项同构。
+                     ⚠️ 标签写「预估」而非直接报数——
+                     GPS 测速有误差、爬坡只测水平分量，
+                     精度约 ±10%，说「预估」不夸大其精确度。
+                     预计可行驶里程 = 剩余电量除以百公里电耗，
+                     电耗没跑出来时只显示占位符，不用噪声上的里程误导用户。 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_distance_label" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tv_ride_distance"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="18sp"
+                                tools:text="6.42" />
+
+                            <TextView
+                                android:id="@+id/tv_ride_distance_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:text="@string/unit_km" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_estimated_range_label" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tv_ride_estimated_range"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="18sp"
+                                tools:text="42.6" />
+
+                            <TextView
+                                android:id="@+id/tv_ride_estimated_range_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:text="@string/unit_km" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- 第三格占位：让第一行与下面两行的列起点严格对齐 -->
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+                </LinearLayout>
+
+                <!-- ⭐ 第二行（行程口径，含停车的时间轴）：
+                     开始时间 / 行程用时 / 行程均速 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <!-- 开始时间：本次记录启动的墙钟时刻 -->
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_started_at_label" />
+
+                        <TextView
+                            android:id="@+id/tv_ride_started_at"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="14sp"
+                            tools:text="13:12" />
+                    </LinearLayout>
+
+                    <!-- 里程时长：当前时间 - 开始时间，含停车 -->
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_trip_duration_label" />
+
+                        <TextView
+                            android:id="@+id/tv_ride_trip_duration"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:textSize="14sp"
+                            tools:text="15 分 20 秒" />
+                    </LinearLayout>
+
+                    <!-- 里程均速：里程 ÷ 里程时长（含停车，会被拉低） -->
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_trip_avg_speed_label" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tv_ride_trip_avg_speed"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp"
+                                tools:text="15.4" />
+
+                            <TextView
+                                android:id="@+id/tv_ride_trip_avg_speed_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_gravity="bottom"
+                                android:text="@string/unit_kmh" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- ⭐ 第三行（骑行口径，剔除停车）：
+                     百公里能耗 / 骑行用时 / 骑行均速 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <!-- 百公里能耗：跑 100 公里要多少度电
+                         由总耗能(Wh) ÷ 总里程(km) × 100 得出 -->
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_energy_per_100_label" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tv_ride_energy_per_100"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp"
+                                tools:text="12.4" />
+
+                            <TextView
+                                android:id="@+id/tv_ride_energy_per_100_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_gravity="bottom"
+                                android:text="@string/unit_kwh" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- 骑行用时：只累加「在动」的时间，停车不计入 -->
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_duration_label" />
+
+                        <TextView
+                            android:id="@+id/tv_ride_duration"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:includeFontPadding="false"
+                            android:textSize="14sp"
+                            tools:text="12 分 54 秒" />
+                    </LinearLayout>
+
+                    <!-- 骑行均速：里程 ÷ 骑行用时（时间加权，剔除停车） -->
+                    <LinearLayout
+                        style="@style/MetricContainer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/ride_avg_speed_label" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tv_ride_avg_speed"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="14sp"
+                                tools:text="18.6" />
+
+                            <TextView
+                                android:id="@+id/tv_ride_avg_speed_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_gravity="bottom"
+                                android:text="@string/unit_kmh" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 峰值记录：四项汇总 ============ -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/ride_peak_section" />
+
+                <LinearLayout
+                    android:id="@+id/row_peak_speed"
+                    style="@style/PeakRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        style="@style/PeakRowName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/peak_name_speed" />
+
+                    <TextView
+                        android:id="@+id/tv_peak_speed"
+                        style="@style/PeakRowTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        tools:text="最高速度60 km/h" />
+
+                    <TextView
+                        android:id="@+id/tv_peak_speed_time"
+                        style="@style/PeakRowTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        tools:text="12:34" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/row_peak_power"
+                    style="@style/PeakRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        style="@style/PeakRowName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/peak_name_power" />
+
+                    <TextView
+                        android:id="@+id/tv_peak_power"
+                        style="@style/PeakRowTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        tools:text="最高功率3200 W" />
+
+                    <TextView
+                        android:id="@+id/tv_peak_power_time"
+                        style="@style/PeakRowTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        tools:text="12:35" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/row_peak_current"
+                    style="@style/PeakRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        style="@style/PeakRowName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/peak_name_current" />
+
+                    <TextView
+                        android:id="@+id/tv_peak_current"
+                        style="@style/PeakRowTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        tools:text="最大电流 89 A" />
+
+                    <TextView
+                        android:id="@+id/tv_peak_current_time"
+                        style="@style/PeakRowTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        tools:text="12:35" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/row_peak_diff"
+                    style="@style/PeakRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            style="@style/PeakRowName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/peak_name_diff" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="6dp"
+                            android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tv_peak_diff"
+                            style="@style/PeakRowTitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="最大压差 35 mV" />
+
+                        <!-- 压差详情**分三行**（高低电压各自一行） -->
+                        <TextView
+                            android:id="@+id/tv_peak_diff_detail"
+                            style="@style/PeakRowDetail"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:visibility="gone"
+                            tools:text="出现时电流：89 A" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_peak_diff_time"
+                        style="@style/PeakRowTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        tools:text="12:36" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+
+        <!-- ============ 空状态提示 ============ -->
+        <TextView
+            android:id="@+id/tv_empty_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:gravity="center"
+            android:text="@string/ride_empty_hint"
+            android:textColor="@color/text_tertiary"
+            android:textSize="13sp"
+            android:visibility="gone" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

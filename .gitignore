@@ -1,0 +1,30 @@
+# ===== 逆向分析产物（绝不入库：反编译源码与笔记，法律风险） =====
+reverse/
+PROTOCOL_FIELDS.md
+TPMS_REVERSE.md
+DEBUG_GUIDE.md
+DEV_NOTES.md
+verify.py
+verify_paramb.py
+verify_protocol.py
+watch_log.sh
+u1.png
+capture/
+
+# ===== 用户个人数据 =====
+yybms_prefs_*.xml
+
+# ===== 构建产物 =====
+build/
+.gradle/
+local.properties
+app/build/
+*.iml
+.idea/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+
+# ===== WorkBuddy 工作日志（私人笔记，不入库） =====
+.workbuddy/

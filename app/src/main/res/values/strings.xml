@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">骑行助手</string>
+    <string name="title_settings">设置</string>
+    <string name="title_cell_detail">单体压差</string>
+    <string name="arrow_more">›</string>
+    <string name="verdict_normal">压差正常</string>
+    <string name="verdict_abnormal">压差超标</string>
+    <string name="cell_diff_hint">红字表示该串压差超过 80mV，建议检查电芯一致性。</string>
+    <string name="no_cell_data">暂无单体数据，请先连接保护板</string>
+    <!-- 长按「已连接」卡片时的提示（未连接状态） -->
+    <string name="only_when_connected">请先连接保护板，再长按此处切换设备</string>
+    <string name="label_cell_count">单体数</string>
+
+    <!-- 连接状态 -->
+    <string name="state_disconnected">未连接</string>
+    <string name="state_connecting">连接中</string>
+    <string name="state_connected">已连接</string>
+    <string name="state_failed">未连接保护板</string>
+    <string name="auto_connecting">正在自动连接上次设备…</string>
+    <!-- 已连接时不再显示「数据每秒刷新」这类冗余提示，只保留状态色块 -->
+    <string name="connected_hint"></string>
+    <string name="connecting_hint">正在连接设备，请稍候…</string>
+    <!-- FAILED/DISCONNECTED 的提示文案已按用户要求删除：
+         上方「连接状态」已明确显示状态，再加「连接失败，请靠近设备后重试」冗余且误导 -->
+    <string name="cancel_auto_connect">取消自动连接</string>
+    <string name="auto_connect_cancelled">已取消自动连接</string>
+    <string name="bluetooth_off_title">蓝牙未开启</string>
+    <string name="bluetooth_off_msg">本应用需要蓝牙连接彦阳保护板，请先开启蓝牙。</string>
+    <string name="perm_required">需要权限</string>
+    <string name="perm_bt_msg">缺少蓝牙权限，无法扫描与连接设备。请授予蓝牙权限后重试。</string>
+    <string name="perm_settings_msg">蓝牙权限已被拒绝且不再询问。请前往系统设置 - 应用 - 权限，手动开启蓝牙相关权限。</string>
+    <string name="perm_banner_msg">缺少蓝牙权限，无法搜索设备</string>
+    <string name="grant_now">去授权</string>
+    <string name="to_settings">去设置</string>
+    <string name="to_enable">去开启</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确定</string>
+
+    <!-- 扫描 -->
+    <string name="scan">扫描</string>
+    <string name="scan_yy_only_hint">仅显示名称含 YY 的保护板</string>
+    <string name="scanning">正在扫描蓝牙设备…</string>
+    <string name="device_list_title">选择设备</string>
+    <string name="tag_yanyang">彦阳</string>
+
+    <!-- 分区标题 -->
+    <string name="section_battery">电池参数</string>
+    <string name="section_cells">单体电芯</string>
+    <string name="section_temp">温度</string>
+    <string name="section_battery_state">电池状态</string>
+    <string name="section_trend">近 5 分钟曲线</string>
+
+    <!-- 参数标签 -->
+    <string name="label_total_voltage">电压</string>
+    <string name="label_total_current">电流</string>
+    <string name="label_soc">剩余电量</string>
+    <string name="label_remaining">剩余容量</string>
+    <string name="label_rated">额定容量</string>
+    <string name="label_cell_max">最高单体</string>
+    <string name="label_cell_min">最低单体</string>
+    <string name="label_cell_diff">压差</string>
+    <string name="label_temp1">T1 温度</string>
+    <string name="label_temp2">T2 温度</string>
+
+    <!-- 格式化 -->
+    <string name="format_voltage">%.2fV</string>
+    <string name="format_voltage_mv">%.3fV</string>
+    <string name="format_current">%.1fA</string>
+    <!-- 电流为 0 时不显示小数点 -->
+    <string name="current_idle_fmt">0A</string>
+    <string name="format_percent">%.0f%%</string>
+    <string name="format_capacity">%.2fAh</string>
+    <string name="format_diff">%.0fmV</string>
+    <string name="format_temp">%.1f℃</string>
+    <string name="format_cell_count">%d串</string>
+    <!--带电池类型的串数（%1$s=三元/铁锂等，%2$d=串数），与官方 APP 显示一致 -->
+    <string name="format_cell_count_with_type">%1$s / %2$d串</string>
+    <string name="temp_none">未接</string>
+
+    <!-- 告警 -->
+    <string name="alarm_normal">正常</string>
+    <string name="alarm_title">保护板告警</string>
+    <string name="balance_on">均衡：开启</string>
+    <!--均衡中时显示具体串号，数据来自 165B 帧 bArr[118..121] 逐串位 -->
+    <string name="balance_on_cells">均衡：第 %1$s 串均衡中</string>
+    <string name="balance_off">均衡：关闭</string>
+
+    <!-- 图例 -->
+    <string name="legend_soc">SOC</string>
+    <string name="legend_voltage">总电压</string>
+    <string name="legend_current">总电流</string>
+
+    <!-- 快照 -->
+
+    <!-- 设置 -->
+    <string name="setting_auto_connect">启动APP自动连接上次保护板</string>
+    <string name="setting_auto_connect_desc">后台尝试连接已保存设备，失败不打扰</string>
+    <string name="setting_vibrate">告警震动提醒</string>
+    <string name="setting_vibrate_desc">BMS 触发告警时震动</string>
+    <string name="setting_dialog">告警弹窗提醒</string>
+    <string name="setting_dialog_desc">BMS 触发告警时弹出对话框</string>
+    <string name="setting_saved_device">已保存设备</string>
+    <string name="setting_connection">连接设置</string>
+    <string name="setting_alert">告警提醒</string>
+    <string name="setting_clear_device">清除已保存设备</string>
+    <string name="setting_cleared">已清除设备记录</string>
+    <string name="no_saved_device">未保存设备</string>
+    <string name="clear_confirm_title">确认清除</string>
+    <string name="clear_confirm_msg">将删除已保存的保护板记录，下次启动不会自动连接。</string>
+    <string name="label_power">功率</string>
+    <string name="format_power">%1$.1fW</string>
+    <string name="label_mos_temp">MOS 温度</string>
+    <string name="power_discharging">放电中</string>
+    <string name="power_charging">充电中</string>
+    <!-- 「空闲中」已按用户要求删除：电流为 0 时连标签一起留空 -->
+    <string name="nav_overlay">悬浮显示</string>
+    <string name="overlay_perm_hint">需要悬浮窗权限，请在接下来的页面里允许「显示在其他应用上层」</string>
+    <string name="overlay_on">悬浮胎压已显示（点击信息框返回本应用，长按关闭）</string>
+    <string name="overlay_off">悬浮胎压已关闭</string>
+    <string name="overlay_start">启动悬浮信息</string>
+    <string name="overlay_stop">关闭悬浮信息</string>
+    <string name="overlay_items_section">悬浮项目</string>
+    <string name="overlay_item_tpms_front">前轮胎压</string>
+    <string name="overlay_display_tpms_front">前轮胎压</string>
+    <string name="overlay_display_tpms_rear">后轮胎压</string>
+    <string name="overlay_display_battery">电量</string>
+    <string name="overlay_display_volts">电压</string>
+    <string name="overlay_display_max_speed">极速</string>
+    <string name="overlay_display_amps">Max电流</string>
+    <string name="overlay_display_power">Max功率</string>
+    <string name="overlay_display_mostemp">MOS</string>
+    <string name="overlay_display_diff_live">压差</string>
+    <string name="overlay_display_diff_max">Max压差</string>
+    <string name="overlay_display_mos_temp">MOS</string>
+    <string name="overlay_display_power_live">功率</string>
+    <string name="overlay_display_amps_live">电流</string>
+    <string name="overlay_item_tpms_rear">后轮胎压</string>
+    <string name="overlay_item_battery">电池电量</string>
+    <string name="overlay_item_bg_alpha">背景透明度</string>
+    <string name="overlay_item_alpha_short">透明度</string>
+    <string name="overlay_auto_on_nav">导航后自动悬浮显示</string>
+    <string name="overlay_jump_on_nav">导航后跳转页面</string>
+    <string name="overlay_bg_solid">不透明</string>
+    <string name="overlay_bg_semi">半透明</string>
+    <string name="overlay_bg_light">较透明</string>
+<string name="overlay_item_volts">电池电压</string>
+    <string name="overlay_item_max_speed">最大速度</string>
+    <string name="overlay_item_amps">最大电流</string>
+    <string name="overlay_item_amps_live">实时电流</string>
+    <string name="overlay_item_power_live">实时功率</string>
+    <string name="overlay_item_power">峰值功率</string>
+    <string name="overlay_item_diff_live">实时压差</string>
+    <string name="overlay_item_diff_max">最大压差</string>
+    <string name="overlay_item_mos_temp">MOS温度</string>
+    <string name="overlay_open_nav">打开导航软件</string>
+    <string name="overlay_quick_nav">+快捷导航</string>
+    <string name="quick_nav_value_hint">地点 / 坐标 / 链接（可选）</string>
+    <string name="quick_nav_label_hint">按钮名称</string>
+    <string name="overlay_picker_title">选择导航软件</string>
+    <string name="nav_app_set_done">已选择导航软件：%1$s</string>
+    <string name="overlay_size_small">小</string>
+    <string name="overlay_size_mid">中</string>
+    <string name="overlay_size_large">大</string>
+    <string name="overlay_hint">悬浮框可拖动调整位置（自动记忆）；点击返回本应用；长按关闭</string>
+    <string name="nav_home">首页</string>
+    <string name="nav_realtime">实时</string>
+<string name="nav_data">数据</string>
+    <string name="realtime_motion">运动数据</string>
+    <string name="label_gps_speed">GPS 速度</string>
+    <string name="label_accel_x">加速度 X</string>
+    <string name="label_accel_y">加速度 Y</string>
+    <string name="label_accel_z">加速度 Z</string>
+    <string name="format_speed_kmh">%1$.1f km/h</string>
+    <string name="motion_hint">数据来源：系统定位服务与加速度传感器</string>
+    <string name="chart_power">功率</string>
+    <string name="chart_diff">压差</string>
+    <string name="stat_power">Max --   Min --</string>
+    <string name="stat_diff">Max --   Min --</string>
+    <string name="label_cycle_count">循环次数</string>
+    <string name="battery_state_line">电池状态：%1$s  均衡：%2$s</string>
+    <string name="cycle_count_fmt">循环次数 %1$d</string>
+    <string name="battery_state_normal">电池状态：正常</string>
+    <string name="battery_state_abnormal">电池状态：%1$s</string>
+    <!-- 未连接时用：绝不能显示「正常」，那会让用户误以为设备没问题 -->
+    <string name="state_unknown_fmt">电池状态：--</string>
+    <string name="cycle_count_unknown">循环次数：--</string>
+    <string name="value_none">--</string>
+    <string name="unit_kmh">km/h</string>
+    <!-- 曲线水印的单位（字号明显小于数值，放在独立 TextView 里） -->
+    <string name="unit_watt">W</string>
+    <string name="unit_ampere">A</string>
+    <string name="unit_mv">mV</string>
+    <!-- 速度卡片右下角：本次行程最高速度 -->
+    <string name="gps_max_fmt">Max %1$d</string>
+    <!-- 累计里程（协议无里程字段，由 App 按速度积分，故标「约」） -->
+    <!-- GPS 信号丢失提示（%1$s 是时长，如「3秒」「3分钟2秒」） -->
+    <!-- ⭐ XX 最大值记录卡（四张卡通用，需求：记录出现最大值那一刻的时刻） -->
+    <!-- 例：最大速度记录 / 最大功率记录 / 最大电流记录 / 最大压差记录 -->
+
+    <!-- 第一行：例「最大速度 60km/h @ 12:34」 -->
+    <string name="peak_record_speed">最大速度 %1$s km/h @ %2$s</string>
+    <string name="peak_record_power">最大功率 %1$s W @ %2$s</string>
+    <string name="peak_record_current">最大电流 %1$s A @ %2$s</string>
+    <string name="peak_record_diff">最大压差 %1$smV @ %2$s</string>
+
+    <!-- 以下 3 行**仅压差卡**使用 -->
+    <!-- 例：工作电流：89 A -->
+    <string name="peak_detail_current">工作电流：%1$s A</string>
+    <!-- ⭐ 例：最高电压：单体 01 @ 4.921V
+         ⚠️ 单体序号与电压之间用 @ 分隔（不是空格）：
+         多个数字挤在一起分不清哪个是序号、哪个是电压。
+         @ = 「在……时/处」——读作「单体 01 处的电压是 4.921V」。 -->
+    <string name="peak_detail_max_cell">最高电压：单体 %1$02d @ %2$.3fV</string>
+    <string name="peak_detail_min_cell">最低电压：单体 %1$02d @ %2$.3fV</string>
+    <!-- ⭐ 偏离其余电芯均值最多的那颗（一致性诊断）。
+         %1$d=序号 %2$s=偏高/偏低 %3$.1f=偏离量(mV)
+         ⚠️ 用醒目色（state_discharging 红）与上面三行区分。 -->
+    <string name="peak_detail_outlier_cell">偏离最多：单体 %1$02d（%2$s%3$.1fmV）</string>
+    <string name="peak_detail_ir">推测内阻差：%.2f 毫欧姆</string>
+    <string name="peak_outlier_high">偏高</string>
+    <string name="peak_outlier_low">偏低</string>
+
+    <!-- ==================== 底部「数据」页（本次骑行统计） ==================== -->
+    <string name="ride_page_title">骑行数据</string>
+    <string name="ride_empty_hint">开始骑行后，这里会记录本次骑行的各项数据</string>
+
+    <!-- ⭐ 第一行：预估里程（独占一行，突出核心总量） -->
+    <string name="ride_distance_label">本次里程预估</string>
+    <string name="ride_estimated_range_label">预计可行驶里程</string>
+
+    <!-- ⭐ 第二行（行程口径，含停车的时间轴）：
+         开始时间 / 行程用时 / 行程均速
+         ⭐ 按**同一口径放在同一行**分组（用户要求）：
+         「行程」是时间轴（含等红灯），「骑行」是运动状态（剔除停车），
+         同一口径放在同一行，横向对比时语义不会串。 -->
+    <string name="ride_started_at_label">开始时间</string>
+    <string name="ride_trip_duration_label">行程用时</string>
+    <string name="ride_trip_avg_speed_label">行程均速</string>
+
+    <!-- ⭐ 第三行（骑行口径，剔除停车）：
+         百公里能耗 / 骑行用时 / 骑行均速
+         单位一律放数值**下方**（MetricUnit 样式），不拼进标签也不拼进数值后面。 -->
+    <!-- 百公里能耗 = 总耗能(Wh) ÷ 总里程(km) × 100。
+         比「百公里加速到 100km/h 耗时」更贴近日常换算：直接乘单次里程即得补能成本。 -->
+    <string name="ride_energy_per_100_label">百公里能耗</string>
+    <string name="ride_duration_label">骑行用时</string>
+    <string name="ride_avg_speed_label">骑行均速</string>
+
+    <!-- 单位（显示在数值下方，视觉层级低于标签/数值）
+     ⚠️ km/h 复用上面已有的 unit_kmh，不要重复定义（资源 merger 会报错）。
+     ⚠️ 单位**只在数值有效时才显示**（见 RideDataFragment.renderSummary）——
+     数值是占位符时，独留一条「km/h」很奇怪（像是有值却读不出来）。 -->
+    <string name="unit_kwh">Kwh</string>
+    <string name="unit_km">km</string>
+
+    <!-- 值尚未产生时的占位。用短横线而不是四遍「尚未开始」：
+         骑行前四个字段全是同一句话，视觉噪音大且占了四倍空间。
+         空状态提示只在页面下方说一次。
+         ⚠️ 注释里不能出现连续的英文双连字符，资源 merger 会报 parse 错误。 -->
+    <string name="ride_placeholder">--</string>
+    <!-- 时长格式：中文单位直读，如「1 时 05 分 30 秒」「12 分 54 秒」
+     ⚠️ 用「时分秒」文字而非 HH:mm:ss —— 开始时间那一栏已经用冒号表示时刻，
+     同页再出现冒号会造成「这个冒号是时间点还是时长」的歧义。
+     ⚠️ 秒/分一律不补零（「5 分 3 秒」而非「05 分 03 秒」）：
+     中文语境下补零反而看着像时间戳。 -->
+    <string name="ride_duration_hms">%1$d 时 %2$d 分 %3$d 秒</string>
+    <string name="ride_duration_ms">%1$d 分 %2$d 秒</string>
+
+    <!-- 四项峰值（骑行页汇总，格式与实时页的记录卡一致） -->
+    <string name="ride_peak_section">峰值记录</string>
+    <!-- 压差详情**分三行**（用户要求高低电压各自一行，不要挤在一行） -->
+    <string name="ride_peak_diff_current">出现时电流：%1$s A</string>
+    <!-- 最高/最低两行与实时页复用（peak_detail_*），不在此处重复定义 -->
+
+    <!-- 峰值行的左侧名称（右侧是「数值@时间」） -->
+    <string name="peak_name_speed">最高速度</string>
+    <string name="peak_name_power">最高功率</string>
+    <string name="peak_name_current">最大电流</string>
+    <string name="peak_name_diff">最大压差</string>
+
+    <!-- 峰值行右侧：%1$s=数值 %2$s=时间 -->
+    <string name="ride_peak_value_fmt">%1$s @ %2$s</string>
+    <string name="ride_peak_value_unit_fmt">%1$s %2$s @ %3$s</string>
+
+    <string name="gps_lost_title">GPS 已丢失</string>
+    <string name="gps_lost_fmt">%1$s</string>
+    <string name="charge_eta_fmt">%1$d 分钟后充满</string>
+    <string name="cycle_count_label">循环次数：%1$d 次</string>
+    <string name="chart_current">电流</string>
+    <!-- 速度卡片左上角标题 + 曲线叠加数值单位 -->
+    <string name="chart_speed">速度</string>
+
+    <!-- 诊断面板 -->
+    <string name="diag_title">诊断面板</string>
+    <string name="diag_close">关闭</string>
+    <!-- 胎压监测 -->
+    <string name="tpms_title">胎压数据</string>
+    <string name="tpms_hint">长按绑定</string>
+    <string name="tpms_front">前轮</string>
+    <string name="tpms_rear">后轮</string>
+    <string name="tpms_unit_bar">bar</string>
+    <string name="tpms_unmatched">未匹配</string>
+    <string name="tpms_no_data_short">无数据</string>
+    <string name="tpms_temp_fmt">温度 %1$d ℃</string>
+    <string name="tpms_update_fmt">更新于 %1$s</string>
+    <string name="tpms_update_just">更新于 刚刚</string>
+    <string name="tpms_update_min_ago">更新于 %1$d 分钟前</string>
+    <string name="tpms_rel_just">刚刚</string>
+    <string name="tpms_rel_min_ago">%1$d 分钟前</string>
+    <string name="tpms_binding_fmt">绑定中… %1$d 秒</string>
+    <string name="tpms_bind_done">%1$s绑定成功（SN 尾号 %2$s）</string>
+    <string name="tpms_bind_timeout">绑定超时，未检测到新传感器</string>
+    <string name="tpms_bind_guide">%1$s进入绑定：请把手机靠近该车轮，30 秒内靠近的传感器将自动绑定</string>
+    <string name="tpms_action_swap">交换前后轮</string>
+    <string name="tpms_swap_done">已交换前后轮</string>
+    <string name="tpms_bind_ambiguous">两颗传感器信号接近，无法区分。请把手机贴近目标车轮后重试</string>
+    <string name="tpms_bound_title">%1$s已绑定（SN 尾号 %2$s）</string>
+    <string name="tpms_action_rebind">重新绑定</string>
+    <string name="tpms_action_unbind">解绑</string>
+    <string name="tpms_unbound_done">%1$s已解绑</string>
+    <string name="tpms_pressure_alarm">胎压越界</string>
+    <string name="tpms_temp_alarm">胎温过高</string>
+    <!-- 胎压阈值设置 -->
+    <string name="setting_tpms_threshold">胎压告警阈值</string>
+    <string name="setting_tpms_threshold_desc">越界时首页胎压卡数值标红。点击对应行修改。</string>
+    <string name="tpms_low_threshold">胎压低压阈值（bar）</string>
+    <string name="tpms_high_threshold">胎压高压阈值（bar）</string>
+    <string name="tpms_temp_threshold">胎温高温阈值（℃）</string>
+    <string name="tpms_value_bar">%1$.2f bar</string>
+    <string name="tpms_value_temp">%1$d ℃</string>
+    <string name="tpms_threshold_invalid">请输入 %1$s ~ %2$s 之间的数值</string>
+    <!-- 诊断面板内的连接/BMS 报警设置（自设置页迁入） -->
+    <string name="bms_alarm_title">BMS 报警</string>
+    <string name="bms_alarm_vibrate">BMS 报警震动</string>
+    <string name="bms_alarm_dialog">BMS 报警弹窗</string>
+    <string name="tpms_bound_section">已绑定传感器</string>
+    <string name="tpms_bound_section_desc">绑定/解绑在首页胎压卡长按操作</string>
+    <string name="tpms_info_sn_fmt">SN %1$s</string>
+    <string name="tpms_info_unbound">未绑定</string>
+    <string name="tpms_battery_model">传感器电池</string>
+    <string name="tpms_focus_title">胎压</string>
+    <string name="tpms_info_volt_fmt"> · 电量 %.1fV</string>
+    <string name="tpms_sensor_section">传感器数据</string>
+    <string name="tpms_sensor_row_fmt">%1$.2fbar · %2$d℃</string>
+    <string name="tpms_info_temp_press_fmt">温度 %1$d℃ · 胎压 %2$.2fbar</string>
+    <string name="tpms_battery_normal">电量正常</string>
+    <string name="tpms_battery_low">电量不足</string>
+    <string name="diag_reset">清空本次会话</string>
+    <string name="diag_reset_title">清空本次会话</string>
+    <string name="diag_reset_msg">将清空里程、耗能、回收、骑行时长、峰值记录与全部曲线采样。此操作不可撤销。</string>
+    <string name="diag_reset_done">已清空</string>
+    <string name="diag_no_device">未连接设备，暂无实时数据。</string>
+
+    <!-- 数据页：电池健康（派生指标） -->
+</resources>

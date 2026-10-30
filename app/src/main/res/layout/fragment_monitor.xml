@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- ============ 权限缺失横幅（常驻可见，非一次性弹窗） ============ -->
+        <LinearLayout
+            android:id="@+id/permission_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_banner_warning"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/perm_banner_msg"
+                android:textColor="@color/abnormal"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_banner_action"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="@string/grant_now" />
+        </LinearLayout>
+
+        <!-- ============ 连接状态 ============ -->
+        <!-- ⭐ 支持**长按**弹出蓝牙扫描（连接成功后换连别的保护板），
+             所以必须 clickable=true，否则长按不会回调 setOnLongClickListener。 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_connection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:focusable="true"
+            android:longClickable="true"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_connection_state"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/state_disconnected"
+                        android:textColor="@color/state_disconnected"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        tools:text="已连接" />
+
+                    <TextView
+                        android:id="@+id/tv_device_name"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        tools:text="彦阳BMS-001" />
+
+                    <TextView
+                        android:id="@+id/btn_cancel_auto"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:padding="6dp"
+                        android:text="@string/cancel_auto_connect"
+                        android:textColor="@color/primary"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                    <!-- ⭐ 「扫描」并入标题行（用户要求：与连接失败状态同一行，省一行高度）。
+                         连接中/已连接时由 renderEmptyState() 隐藏 -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_scan"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:minWidth="0dp"
+                        android:text="@string/scan"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <!-- 连接中进度条：点击设备后立即反馈，避免用户不知是否生效 -->
+                <ProgressBar
+                    android:id="@+id/pb_connecting"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="3dp"
+                    android:layout_marginTop="8dp"
+                    android:indeterminate="true"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tv_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    tools:text="正在自动连接上次设备…" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+
+
+        <!-- ============ 电池状态（保护告警） ============ -->
+        <!-- ⭐ 用户要求放在「电池总参数」上方 -->
+        <!-- 与其余卡片一致保留 12dp 间距：移位时误去掉会导致与上方「已连接」卡紧贴（用户反馈"很丑"） -->
+        <!-- ⚠️ 默认 gone：建立连接之前整卡隐藏（用户要求"在建立连接之前不显示"），
+             由 MonitorFragment 依连接状态控制显隐 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_battery_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <!-- 一行显示：电池状态 + 均衡状态 + 循环次数 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_alarm_tags"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/state_connected"
+                        android:textSize="15sp"
+                        tools:text="电池状态：正常" />
+
+                    <TextView
+                        android:id="@+id/tv_balance_state"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        tools:text="均衡：关闭" />
+
+                    <TextView
+                        android:id="@+id/tv_cycle_count"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        tools:text="循环次数：86 次" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 胎压监测 ============
+             数据来源：TPMS 传感器广播（纯 beacon，只扫不连，见 TPMS_REVERSE.md）。
+             左右两半 = 前/后轮；未绑定时显示「未匹配」。
+             ⭐ 长按左/右半区进入该轮位绑定（倒计时 30s），已绑定时弹解绑/重绑。
+             阈值越界数值标红（阈值在设置页配置）。 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_tpms"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <!-- ⭐ 标题行改 FrameLayout：时钟**水平居中**（用户要求），
+                     左=标题，右=提示+设置入口，互不挤占 -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        style="@style/CardTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="start|center_vertical"
+                        android:text="@string/tpms_title" />
+
+                    <!-- ⭐ 时钟：原独立时间卡已取消（用户要求），
+                         移到本卡标题行**正中间**，字号加大（24sp bold）。
+                         HH:mm 24 小时制，由 SimpleDateFormat("HH:mm") 保证 -->
+                    <TextView
+                        android:id="@+id/tv_tpms_clock"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.04"
+                        android:textColor="@color/primary"
+                        android:textSize="30sp"
+                        android:textStyle="bold"
+                        tools:text="14:05" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end|center_vertical"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <!-- 阈值配置入口：主界面 Toolbar 菜单实机不可达（沉浸式盖住，既有问题），
+                             没有这个图标阈值就改不了，故在此直达设置页 -->
+                        <ImageButton
+                            android:id="@+id/btn_tpms_settings"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_marginStart="4dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/setting_tpms_threshold"
+                            android:scaleType="fitCenter"
+                            android:src="@android:drawable/ic_menu_preferences" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:baselineAligned="false"
+                    android:orientation="horizontal">
+
+                    <!-- 前轮：长按绑定 -->
+                    <!-- ⭐ 数值+单位与「前轮」标签同行（用户要求，节省空间），字号不变 -->
+                    <LinearLayout
+                        android:id="@+id/layout_tpms_front"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="bottom"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:text="@string/tpms_front"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:id="@+id/tv_tpms_front_pressure"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:includeFontPadding="false"
+                                android:textSize="22sp"
+                                tools:text="2.43" />
+
+                            <TextView
+                                android:id="@+id/tv_tpms_front_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_marginBottom="2dp"
+                                android:text="@string/tpms_unit_bar" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tv_tpms_front_update"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp"
+                            tools:text="更新于 2分钟前" />
+                    </LinearLayout>
+
+                    <!-- 后轮：长按绑定 -->
+                    <LinearLayout
+                        android:id="@+id/layout_tpms_rear"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="bottom"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:text="@string/tpms_rear"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:id="@+id/tv_tpms_rear_pressure"
+                                style="@style/MetricValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:includeFontPadding="false"
+                                android:textSize="22sp"
+                                tools:text="未匹配" />
+
+                            <TextView
+                                android:id="@+id/tv_tpms_rear_unit"
+                                style="@style/MetricUnit"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="2dp"
+                                android:layout_marginBottom="2dp"
+                                android:text="@string/tpms_unit_bar" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tv_tpms_rear_update"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp"
+                            tools:text="更新于 2分钟前" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+<!-- ============ 电池总参数 ============ -->
+        <!-- ⚠️ id=card_battery_params：诊断面板隐藏入口（长按本卡进入） -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_battery_params"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/CardTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/section_battery" />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <!-- ⭐ 「XX 分钟后充满」与标题同行靠右（用户要求），
+                         出现/消失不再增减行数、不破坏卡片布局 -->
+                    <TextView
+                        android:id="@+id/tv_charge_eta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/state_charging"
+                        android:textSize="13sp"
+                        android:visibility="gone"
+                        tools:text="46 分钟后充满"
+                        tools:visibility="visible" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_total_voltage" />
+
+                        <TextView
+                            android:id="@+id/tv_voltage"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="54.20V" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_total_current" />
+
+                        <TextView
+                            android:id="@+id/tv_current"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="-2.10A" />
+                    </LinearLayout>
+
+                    <!-- 功率 = 总压 × 电流，与电压/电流同排 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:id="@+id/tv_power_label"
+                            android:text="@string/label_power" />
+
+                        <TextView
+                            android:id="@+id/tv_power"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="138.5W" />
+                    </LinearLayout>
+                </LinearLayout>
+
+
+                <!-- 剩余电量 / 剩余容量 / 额定容量 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_soc" />
+
+                        <TextView
+                            android:id="@+id/tv_soc"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="86%" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_remaining" />
+
+                        <TextView
+                            android:id="@+id/tv_capacity"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="60.20Ah" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_rated" />
+
+                        <TextView
+                            android:id="@+id/tv_rated_capacity"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="70.00Ah" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 单体电芯（可点击进入压差详情） ============ -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_cells"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/CardTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/section_cells" />
+
+                    <TextView
+                        android:id="@+id/tv_cell_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        tools:text="13串" />
+
+                    <!-- 进入压差详情的箭头提示 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/arrow_more"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_cell_max" />
+
+                        <TextView
+                            android:id="@+id/tv_cell_max"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="4.180V" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_cell_min" />
+
+                        <TextView
+                            android:id="@+id/tv_cell_min"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="4.100V" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_cell_diff" />
+
+                        <TextView
+                            android:id="@+id/tv_cell_diff"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="80mV" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 温度 ============ -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/section_temp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_mos_temp" />
+
+                        <TextView
+                            android:id="@+id/tv_mos_temp"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="33℃" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_temp1" />
+
+                        <TextView
+                            android:id="@+id/tv_temp1"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="30℃" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        style="@style/MetricContainer">
+
+                        <TextView
+                            style="@style/MetricLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_temp2" />
+
+                        <TextView
+                            android:id="@+id/tv_temp2"
+                            style="@style/MetricValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="未接" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+            </LinearLayout>
+</androidx.core.widget.NestedScrollView>

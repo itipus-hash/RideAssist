@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      卡片之间的纵向间距。
+      布局里各卡片用 android:layout_marginTop="6dp"，
+      这里抽成 dimen 供 Kotlin 侧读取（聚焦模式计算卡片居中位置时需要）。
+      ⚠️ 改布局里的 marginTop 时必须同步改这里，否则聚焦时卡片位置会偏。
+    -->
+    <dimen name="card_gap">6dp</dimen>
+
+    <!--
+      实时页内容容器的四周内边距。
+      布局里是 android:padding="10dp"，**它就是「速度卡片到屏幕上沿的留白」**。
+
+      ⚠️ 抽出来的原因：聚焦模式要给容器加 paddingTop 把卡片顶到中间，
+      恢复时必须还原成这个值。早前实现直接 `setPadding(l, 0, r, b)` 归零，
+      连原本的 10dp 也抹掉了 → 恢复后速度卡上方留白消失（用户实测发现）。
+    -->
+    <dimen name="page_padding">10dp</dimen>
+</resources>
