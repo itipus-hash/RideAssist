@@ -172,4 +172,4 @@ APP 底部四个标签页：
 
 ## License
 
-[MIT](LICENSE)
+本项目以 [GNU AGPL-3.0](LICENSE) 协议开源——任何基于本项目的修改（包括网络服务形式提供）都必须同样以 AGPL-3.0 开源。
