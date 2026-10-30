@@ -15,6 +15,27 @@
 - **快捷导航**：一键调起高德地图——支持地名搜索、经纬度坐标（直接导航 / 路径规划二选一）、自定义链接；按钮名称与目的地分离
 - **会话统计**：速度 / 里程 / 能耗实时统计（含派生量不变性断言，防统计口径漂移）
 
+## 界面预览
+
+![界面预览](docs/screenshots/preview.png)
+
+<details>
+<summary>单页大图</summary>
+
+| 首页 | 实时 | 数据 | 悬浮显示 |
+|---|---|---|---|
+| ![首页](docs/screenshots/s_home.png) | ![实时](docs/screenshots/s_realtime.png) | ![数据](docs/screenshots/s_data.png) | ![悬浮显示](docs/screenshots/s_overlay.png) |
+
+</details>
+
+## 下载
+
+最新 Debug 构建（免安装包名 `.debug` 后缀）：
+
+- [apk/RideAssist-v1.0.0-debug.apk](apk/RideAssist-v1.0.0-debug.apk)
+
+> Debug 构建仅用于体验与测试，日常使用建议自行编译 Release 版。
+
 ## 构建
 
 ```
