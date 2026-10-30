@@ -153,7 +153,7 @@
                     android:layout_height="110dp"
                     android:layout_marginTop="6dp">
 
-                    <com.yanyang.yybms.ui.widget.TrendChartView
+                    <io.github.powerycy.rideassist.ui.widget.TrendChartView
                         android:id="@+id/chart_speed"
                         android:layout_width="match_parent"
                         android:visibility="invisible"
@@ -274,7 +274,7 @@
                     android:layout_height="110dp"
                     android:layout_marginTop="6dp">
 
-                    <com.yanyang.yybms.ui.widget.TrendChartView
+                    <io.github.powerycy.rideassist.ui.widget.TrendChartView
                         android:id="@+id/chart_power"
                         android:layout_width="match_parent"
                         android:visibility="invisible"
@@ -347,7 +347,7 @@
                     android:layout_height="110dp"
                     android:layout_marginTop="6dp">
 
-                    <com.yanyang.yybms.ui.widget.TrendChartView
+                    <io.github.powerycy.rideassist.ui.widget.TrendChartView
                         android:id="@+id/chart_current"
                         android:layout_width="match_parent"
                         android:visibility="invisible"
@@ -420,7 +420,7 @@
                     android:layout_height="110dp"
                     android:layout_marginTop="6dp">
 
-                    <com.yanyang.yybms.ui.widget.TrendChartView
+                    <io.github.powerycy.rideassist.ui.widget.TrendChartView
                         android:id="@+id/chart_diff"
                         android:layout_width="match_parent"
                         android:visibility="invisible"
