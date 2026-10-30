@@ -55,6 +55,10 @@ APP 底部四个标签页：
 > 其余模式（地名搜索 / 坐标导航与规划）**仅支持高德地图**。
 > 经纬度可在高德[坐标拾取器](https://lbs.amap.com/tools/picker)获取。
 
+## 🎬 演示视频
+
+[docs/RideAssist-intro.mp4](docs/RideAssist-intro.mp4) —— 30 秒功能速览（启动 / BMS 总览 / 卡片聚焦 / 悬浮窗）
+
 ## 界面预览
 
 ![界面预览](docs/screenshots/preview.png)
