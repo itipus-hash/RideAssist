@@ -37,8 +37,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        setSupportActionBar(binding.toolbar)
-
+        // ⭐ 布局里已用 app:menu 直接挂菜单（MaterialToolbar 自绘）——
+        //    再调 setSupportActionBar 会被 ActionBar 接管并丢弃 app:menu，
+        //    实机上齿轮图标整个消失（点不到设置的根因），二者只能留一个。
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_settings -> {
