@@ -57,7 +57,7 @@ APP 底部四个标签页：
 
 ## 🎬 演示视频
 
-[docs/RideAssist-intro.mp4](docs/RideAssist-intro.mp4) —— 30 秒功能速览（启动 / BMS 总览 / 卡片聚焦 / 悬浮窗）
+[docs/RideAssist-intro.mp4](docs/RideAssist-intro.mp4) —— 一分钟语音讲解：连接保护板 / 悬浮窗与快捷导航 / 开源说明（含隐私处理：设备名与自定义地点已模糊）
 
 ## 界面预览
 
