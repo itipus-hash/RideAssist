@@ -29,3 +29,6 @@ Thumbs.db
 # ===== WorkBuddy 工作日志（私人笔记，不入库） =====
 .workbuddy/
 video/
+
+# ===== IDE 本机 JDK 记录（路径因机器而异，不入库） =====
+gradle/config.properties
