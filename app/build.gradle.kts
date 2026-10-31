@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    namespace = "io.github.powerycy.rideassist"
+    namespace = "io.github.supit.rideassist"
     // 本机 SDK 仅安装了 android-36，compileSdk 取 36
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.powerycy.rideassist"
+        applicationId = "io.github.supit.rideassist"
         minSdk = 21
         // 需求指定 TargetSDK 34：运行时权限行为与需求文档一致
         targetSdk = 34
