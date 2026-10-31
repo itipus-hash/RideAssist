@@ -37,6 +37,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // ⭐ 物理返回键：在单体电芯详情页时回首页（否则直接退出 APP）
+        onBackPressedDispatcher.addCallback(this,
+            object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (currentTag == TAG_CELL_DETAIL) closeCellDetail() else finish()
+                }
+            })
         // ⭐ 布局里已用 app:menu 直接挂菜单（MaterialToolbar 自绘）——
         //    再调 setSupportActionBar 会被 ActionBar 接管并丢弃 app:menu，
         //    实机上齿轮图标整个消失（点不到设置的根因），二者只能留一个。
@@ -44,6 +51,10 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.action_settings -> {
                     startActivity(android.content.Intent(this, SettingsActivity::class.java))
+                    true
+                }
+                R.id.action_close -> {
+                    closeCellDetail()
                     true
                 }
                 else -> false
@@ -145,6 +156,12 @@ class MainActivity : AppCompatActivity() {
         showFragment(TAG_CELL_DETAIL)
     }
 
+    /** ⭐ 关闭单体电芯详情页：回首页 + 恢复底部导航 + 恢复主菜单（扳手） */
+    fun closeCellDetail() {
+        binding.bottomNav.visibility = android.view.View.VISIBLE
+        showFragment(TAG_MONITOR)
+    }
+
     private fun showFragment
 (tag: String) {
         currentTag = tag
@@ -181,14 +198,23 @@ class MainActivity : AppCompatActivity() {
         }
         transaction.commitAllowingStateLoss()
 
-        // 详情页显示返回按钮与标题栏；首页/实时页隐藏工具栏，避免留空白
+        // 详情页显示标题栏 + 右上角 ✕（不显示扳手，防止误入胎压设置）；
+        // 其它页隐藏工具栏，避免留空白
         if (tag == TAG_CELL_DETAIL) {
             binding.toolbar.visibility = android.view.View.VISIBLE
-            supportActionBar?.setDisplayHomeAsUpEnabled(true)
-            supportActionBar?.title = getString(R.string.title_cell_detail)
+            binding.toolbar.title = getString(R.string.title_cell_detail)
+            // ⭐ app:menu 挂的扳手与详情页 ✕ 互斥：clear 后换专用关闭菜单
+            if (binding.toolbar.menu.findItem(R.id.action_settings) != null) {
+                binding.toolbar.menu.clear()
+                binding.toolbar.inflateMenu(R.menu.menu_close)
+            }
         } else {
-            supportActionBar?.setDisplayHomeAsUpEnabled(false)
             binding.toolbar.visibility = android.view.View.GONE
+            // ⭐ 返回普通页时恢复主菜单（供首页右上角扳手使用）
+            if (binding.toolbar.menu.findItem(R.id.action_settings) == null) {
+                binding.toolbar.menu.clear()
+                binding.toolbar.inflateMenu(R.menu.menu_main)
+            }
         }
     }
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- ⭐ 单体电芯详情页专用：右上角 ✕ 关闭（扳手不显示，防止误入胎压设置） -->
+    <item
+        android:id="@+id/action_close"
+        android:icon="@android:drawable/ic_menu_close_clear_cancel"
+        android:title="@string/cancel"
+        app:showAsAction="always" />
+</menu>
