@@ -1,4 +1,4 @@
-"""生成彦阳 BMS 应用图标 PNG（纯标准库实现，无需 Pillow）。
+"""生成 RideAssist 骑行助手应用图标 PNG（纯标准库实现，无需 Pillow）。
 
 图标：蓝底 + 白色闪电（电池/能量意象）。
 输出 mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png 与 ic_launcher_round.png
