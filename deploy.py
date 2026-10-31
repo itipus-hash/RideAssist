@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-NAS_DIR = r"D:\NAS\RideAssist"
+NAS_DIR = r"D:\NAS\RideAssist-apk"
 PROJECT_NAME = "RideAssist"
 
 JAVA_HOME = r"C:\Program Files\Android\Android Studio\jbr"
