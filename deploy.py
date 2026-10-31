@@ -1,40 +1,34 @@
-"""构建 APK 并复制到 D:\\NAS。
+"""构建 APK 并更新到项目 apk/ 目录（随 git 提交到 GitHub）。
 
 用法：
-    python deploy.py            # 构建 Debug 并复制
-    python deploy.py --release  # 构建 Release 并复制
-    python deploy.py --apk-only # 不重新构建，只复制现有 APK
+    python deploy.py            # 构建 Debug 并更新
+    python deploy.py --release  # 构建 Release 并更新
+    python deploy.py --apk-only # 不重新构建，只更新现有 APK
 
-命名规则：<项目名>_v<版本>_<日期>_<变体>.apk
-另外维护一个 <项目名>_latest_<变体>.apk 作为"最新可用"副本。
+命名规则（固定名，覆盖式，目录里永远只有一个最新包）：
+    apk/RideAssist-v<版本>-<变体>.apk
 """
 import os
 import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-NAS_DIR = r"D:\NAS\RideAssist-apk"
+APK_DIR = os.path.join(PROJECT_DIR, "apk")     # 项目内目录，随 git 提交
 PROJECT_NAME = "RideAssist"
 
-JAVA_HOME = r"C:\Program Files\Android\Android Studio\jbr"
+JAVA_HOME = r"C:/Program Files/Android/Android Studio/jbr"
 GRADLE = None
-# 优先用 wrapper，找不到再回退到本机缓存
-for p in [
-    os.path.join(PROJECT_DIR, "gradlew.bat"),
-]:
+for p in [os.path.join(PROJECT_DIR, "gradlew.bat")]:
     if os.path.exists(p):
         GRADLE = p
         break
 
 
 def find_gradle():
-    """定位可用的 Gradle"""
     if GRADLE:
         return GRADLE
-    # 回退：扫描本机 wrapper 缓存里的 gradle
     import glob
     base = os.path.expanduser(r"~\.gradle\wrapper\dists")
     for pattern in ("gradle-8.14-all/*/gradle-8.14/bin/gradle.bat",
@@ -46,7 +40,6 @@ def find_gradle():
 
 
 def read_version():
-    """从 build.gradle.kts 读取 versionName"""
     cfg = os.path.join(PROJECT_DIR, "app", "build.gradle.kts")
     with open(cfg, encoding="utf-8") as f:
         m = re.search(r'versionName\s*=\s*"([^"]+)"', f.read())
@@ -80,62 +73,48 @@ def run_build(variant):
 
 
 def find_apk(variant):
-    suffix = "debug" if variant == "debug" else "release"
-    d = os.path.join(PROJECT_DIR, "app", "build", "outputs", "apk", suffix)
+    d = os.path.join(PROJECT_DIR, "app", "build", "outputs", "apk", variant)
     if not os.path.isdir(d):
         return None
     apks = [f for f in os.listdir(d) if f.endswith(".apk")]
     if not apks:
         return None
-    # 优先取 unsigned 的正式包（若存在），否则取第一个
     apks.sort(key=lambda f: ("unsigned" not in f, f))
     return os.path.join(d, apks[0])
 
 
-def copy_to_nas(apk_path, variant):
-    """复制到 NAS。
-
-    命名规则（用户指定）：
-      - 版本包   {项目名}_v{版本}_{时间戳}_{变体}.apk        例 ..._20261009_0035_debug.apk
-      - 最新包   {项目名}_v{版本}_{时间戳}_{变体}_latest.apk  例 ..._20261009_0035_debug_latest.apk
-
-    每次归档时，若已存在**旧的** _latest 文件，
-    会把它**改名为普通版本包名**（去掉 _latest），
-    这样 latest 永远只指向最新一个，历史包仍以版本包形式保留。
-    """
-    if not os.path.exists(NAS_DIR) is False and not os.path.isdir(NAS_DIR):
-        os.makedirs(NAS_DIR, exist_ok=True)
+def copy_to_apk_dir(apk_path, variant):
+    """覆盖式更新项目 apk/ 目录（固定文件名，只保留一个最新包）。"""
+    os.makedirs(APK_DIR, exist_ok=True)
 
     version = read_version()
-    # 时间戳带下划线：20261009_0035
-    ts = datetime.now().strftime("%Y%m%d_%H%M")
-    stem = f"{PROJECT_NAME}_v{version}_{ts}_{variant}"
-    named = f"{stem}.apk"            # 版本包
-    latest = f"{stem}_latest.apk"    # 最新包（同一份内容，多一个_latest 便于识别）
+    named = f"{PROJECT_NAME}-v{version}-{variant}.apk"
 
-    # ⭐ 把 NAS 上**所有**旧的 _latest 文件改名成普通版本包（去掉 _latest 后缀），
-    #   这样 latest 永远只指向最新一个，历史包仍以版本包形式保留。
-    #   ⚠️ 必须按目录扫描而非判断同名文件：latest 带时间戳，
-    #   每次归档的文件名都不同，判断 os.path.exists(latest) 永远为 False，
-    #   旧latest 会无限堆积（实测踩到）。
-    import glob
-    for old_latest in glob.glob(os.path.join(NAS_DIR, f"*_{variant}_latest.apk")):
-        renamed = old_latest[:-len("_latest.apk")] + ".apk"
-        if os.path.exists(renamed):
-            os.remove(old_latest)      # 同名版本包已存在，直接删掉重复的 latest
+    # 清掉该变体的旧版本文件（版本号升级后旧名残留）
+    for f in os.listdir(APK_DIR):
+        if f.startswith(PROJECT_NAME) and f.endswith(f"-{variant}.apk") and f != named:
+            os.remove(os.path.join(APK_DIR, f))
+
+    dst = os.path.join(APK_DIR, named)
+    shutil.copy2(apk_path, dst)
+
+    size = os.path.getsize(dst) / 1024 / 1024
+    print(f"[3/3] 已更新：apk/{named}  ({size:.1f} MB)")
+
+    # 自动提交到 git（失败不影响结果，用户可手动 commit）
+    try:
+        subprocess.run(["git", "add", f"apk/{named}"], cwd=PROJECT_DIR,
+                       capture_output=True)
+        r = subprocess.run(
+            ["git", "commit", "-q", "-m", f"build: 更新 apk/{named}"],
+            cwd=PROJECT_DIR, capture_output=True, text=True)
+        if r.returncode == 0:
+            print("   已自动提交，记得 Push 到 GitHub")
         else:
-            os.replace(old_latest, renamed)
-
-    dst_named = os.path.join(NAS_DIR, named)
-    dst_latest = os.path.join(NAS_DIR, latest)
-    shutil.copy2(apk_path, dst_named)
-    shutil.copy2(apk_path, dst_latest)
-
-    size = os.path.getsize(dst_named) / 1024 / 1024
-    print(f"[3/3] 已复制到 NAS：{NAS_DIR}")
-    print(f"   版本包 {named}  ({size:.1f} MB)")
-    print(f"   最新包 {latest}")
-    return dst_named
+            print("   （无变更需要提交）")
+    except Exception:
+        pass
+    return dst
 
 
 def main():
@@ -154,7 +133,7 @@ def main():
         sys.exit(1)
     print(f"[2/3] 产物：{apk}")
 
-    copy_to_nas(apk, variant)
+    copy_to_apk_dir(apk, variant)
 
 
 if __name__ == "__main__":
