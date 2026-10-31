@@ -32,3 +32,6 @@ video/
 
 # ===== IDE 本机 JDK 记录（路径因机器而异，不入库） =====
 gradle/config.properties
+
+# ===== Kotlin 编译会话临时文件 =====
+.kotlin/
