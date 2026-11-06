@@ -141,6 +141,9 @@ data class BmsRealtimeData(
     val temp1: Float? = null,            // ℃ null 表示未接探头
     val temp2: Float? = null,
     val temp3: Float? = null,
+    /** ⭐ T1/T2 原始字节（探头独立性验证用，诊断面板显示） */
+    val tempRawT1: Int? = null,
+    val tempRawT2: Int? = null,
     /** MOS 温度（℃），实测偏移 bArr[64]，原始值−40 */
     val mosTemp: Float? = null,
 

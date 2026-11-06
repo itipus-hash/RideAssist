@@ -564,12 +564,21 @@ val d = withTemp
         r.u8(OFF_CYCLE_COUNT)?.let { d = d.copy(cycleCount = it) }
 
         // 温度：原始值 − 40 = 摄氏度，0 表示探头未接
+        val rawT1 = r.u8(OFF_TMP_1)
+        val rawT2 = r.u8(OFF_TMP_2)
         d = d.copy(
             mosTemp = readTemp(r, OFF_TMP_MOS),
             temp1 = readTemp(r, OFF_TMP_1),
             temp2 = readTemp(r, OFF_TMP_2),
-            temp3 = readTemp(r, OFF_TMP_4)
+            temp3 = readTemp(r, OFF_TMP_4),
+            tempRawT1 = rawT1,
+            tempRawT2 = rawT2
         )
+        // ⭐ 探头独立性统计：T1/T2 原始字节分化计数（诊断面板显示）
+        TempProbeStats.totalFrames++
+        TempProbeStats.lastRawT1 = rawT1
+        TempProbeStats.lastRawT2 = rawT2
+        if (rawT1 != null && rawT2 != null && rawT1 != rawT2) TempProbeStats.divergedFrames++
 
         Log.i(TAG, "单体: ${count}串 ${min}V~${max}V 压差${(max - min) * 1000}mV | " +
                 "总压${d.totalVoltage}V SOC${d.soc}% 剩余${d.remainingCapacity}Ah/${d.ratedCapacity}Ah")
