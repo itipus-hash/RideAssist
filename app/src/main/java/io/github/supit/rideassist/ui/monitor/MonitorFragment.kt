@@ -203,8 +203,7 @@ class MonitorFragment : Fragment() {
                     val msg = if (newer.isEmpty()) {
                         (info.notes.ifBlank { "问题修复与体验优化" })
                     } else {
-                        newer.mapIndexed { idx, h -> "${idx + 1}. v${h.version}\n${h.notes.ifBlank { "问题修复与体验优化" }}" }
-                            .joinToString("\n\n")
+                        newer.joinToString("\n\n") { h -> "v${h.version}\n${h.notes.ifBlank { "问题修复与体验优化" }}" }
                     }
                     v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_msg)
                         .text = "$msg\n\n当前版本 v$current"
