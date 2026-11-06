@@ -46,6 +46,22 @@ def read_version():
     return m.group(1) if m else "1.0.0"
 
 
+def bump_version():
+    """⭐ 版本号自动递增：1.0.1 → 1.0.2（patch 位 +1，写回 build.gradle.kts）"""
+    cfg = os.path.join(PROJECT_DIR, "app", "build.gradle.kts")
+    with open(cfg, encoding="utf-8") as f:
+        content = f.read()
+    m = re.search(r'versionName\s*=\s*"(\d+)\.(\d+)\.(\d+)"', content)
+    if not m:
+        return
+    major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    new = f"{major}.{minor}.{patch + 1}"
+    content = content[:m.start()] + f'versionName = "{new}"' + content[m.end():]
+    with open(cfg, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"[0/3] 版本号自动递增 → {new}")
+
+
 def run_build(variant):
     gradle = find_gradle()
     if not gradle:
@@ -102,15 +118,34 @@ def copy_to_apk_dir(apk_path, variant):
     print(f"[3/3] 已更新：apk/{named}  ({size:.1f} MB)")
 
     # ⭐ 同步生成 update.json（应用内更新检查的版本信息源）
+    #   --notes 可重复传多条，弹窗里每条一行；history 保留各历史版本内容（跨版本累积显示）
     import json
-    notes = ""
-    for i, a in enumerate(sys.argv):
-        if a == "--notes" and i + 1 < len(sys.argv):
-            notes = sys.argv[i + 1]
-    update = {"version": version, "notes": notes, "apk": named}
-    with open(os.path.join(APK_DIR, "update.json"), "w", encoding="utf-8") as f:
+    notes_list = []
+    i = 0
+    while i < len(sys.argv):
+        if sys.argv[i] == "--notes" and i + 1 < len(sys.argv):
+            notes_list.append(sys.argv[i + 1])
+            i += 2
+        else:
+            i += 1
+    notes = "\n".join(f"{n}. {t}" for n, t in enumerate(notes_list, 1))
+
+    json_path = os.path.join(APK_DIR, "update.json")
+    history = []
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                history = json.load(f).get("history", [])
+        except Exception:
+            history = []
+    history = [h for h in history if h.get("version") != version]
+    history.append({"version": version, "notes": notes})
+    history.sort(key=lambda h: [int(x) for x in h["version"].split(".")])
+
+    update = {"version": version, "notes": notes, "apk": named, "history": history}
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(update, f, ensure_ascii=False, indent=2)
-    print(f"   update.json -> v{version}")
+    print(f"   update.json -> v{version}（history {len(history)} 条）")
 
     # 自动提交到 git（失败不影响结果，用户可手动 commit）
     try:
@@ -133,6 +168,7 @@ def main():
     variant = "release" if "--release" in args else "debug"
 
     if "--apk-only" not in args:
+        bump_version()   # ⭐ 每次重新构建自动递增版本号（patch 位 +1）
         if run_build(variant) is None:
             sys.exit(1)
     else:

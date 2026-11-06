@@ -24,10 +24,13 @@ object UpdateChecker {
 
     private const val PREF_SKIPPED = "update_skipped_version"
 
+    data class HistoryEntry(val version: String, val notes: String)
+
     data class UpdateInfo(
         val version: String,   // 最新版本号，如 "1.0.1"
         val notes: String,     // 更新信息
         val apkFile: String,   // apk/ 目录下的文件名
+        val history: List<HistoryEntry> = emptyList(),   // 各历史版本更新内容（跨版本累积显示用）
     ) {
         fun downloadUrls(): List<String> = listOf(
             "https://raw.githubusercontent.com/$OWNER/$REPO/$BRANCH/apk/$apkFile",
@@ -67,11 +70,20 @@ object UpdateChecker {
                 }
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
                 val o = JSONObject(body)
-                Log.d(TAG, "fetch ok: v${o.getString("version")}")
+                val history = mutableListOf<HistoryEntry>()
+                val arr = o.optJSONArray("history")
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val h = arr.getJSONObject(i)
+                        history.add(HistoryEntry(h.getString("version"), h.optString("notes", "")))
+                    }
+                }
+                Log.d(TAG, "fetch ok: v${o.getString("version")} history=${history.size}")
                 return@withContext UpdateInfo(
                     version = o.getString("version"),
                     notes = o.optString("notes", ""),
                     apkFile = o.getString("apk"),
+                    history = history,
                 )
             } catch (e: Exception) {
                 Log.d(TAG, "fetch failed: $e")

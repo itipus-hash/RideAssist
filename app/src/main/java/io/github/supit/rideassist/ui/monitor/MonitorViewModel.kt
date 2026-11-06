@@ -87,10 +87,25 @@ class MonitorViewModel(
 
     // ==================== 扫描 ====================
 
+    /** ⭐ 自动连接标志：每次 startScan 重置；本轮扫描只自动连一次，失败不循环重试 */
+    private var autoConnectAttempted = false
+
     private fun observeScanResults() {
         viewModelScope.launch {
             bleScanner.devices.collect { list ->
                 _scanDevices.value = list
+                // ⭐ 扫描到与已保存保护板**同名**的设备 → 自动连接（用户要求，不再手动点）
+                if (!autoConnectAttempted) {
+                    val saved = prefs.lastDeviceName?.trim()
+                    if (!saved.isNullOrEmpty()) {
+                        val hit = list.firstOrNull { it.name?.trim() == saved }
+                        if (hit != null) {
+                            autoConnectAttempted = true
+                            stopScan()
+                            connectToDevice(hit)
+                        }
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -102,6 +117,7 @@ class MonitorViewModel(
 
     /** 下拉刷新扫描，支持关键词过滤彦阳设备 */
     fun startScan(keyword: String? = null) {
+        autoConnectAttempted = false
         refreshBluetoothState()
         bleScanner.startScan(keyword)
     }

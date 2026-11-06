@@ -194,8 +194,20 @@ class MonitorFragment : Fragment() {
                     val v2 = layoutInflater.inflate(io.github.supit.rideassist.R.layout.dialog_update, null)
                     v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_title)
                         .text = "发现新版本 v${info.version}"
+                    // ⭐ 跨多版本更新：列出所有比当前版本新的版本段（1. / 2. / 3. 分块）
+                    val newer = info.history.filter {
+                        io.github.supit.rideassist.core.update.UpdateChecker.compareVersions(it.version, current) > 0
+                    }.sortedByDescending {
+                        io.github.supit.rideassist.core.update.UpdateChecker.compareVersions(it.version, current)
+                    }
+                    val msg = if (newer.isEmpty()) {
+                        (info.notes.ifBlank { "问题修复与体验优化" })
+                    } else {
+                        newer.mapIndexed { idx, h -> "${idx + 1}. v${h.version}\n${h.notes.ifBlank { "问题修复与体验优化" }}" }
+                            .joinToString("\n\n")
+                    }
                     v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_msg)
-                        .text = (info.notes.ifBlank { "问题修复与体验优化" }) + "\n\n当前版本 v$current"
+                        .text = "$msg\n\n当前版本 v$current"
                     val dlg = com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
                         .setView(v2)
                         .create()
