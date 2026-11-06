@@ -175,7 +175,8 @@ class MonitorFragment : Fragment() {
                 lifecycleScope.launch {
                     val info = try {
                         io.github.supit.rideassist.core.update.UpdateChecker.fetch()
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        android.util.Log.d("UpdateChecker", "check aborted: $e")
                         return@launch   // 网络不通/仓库不可达：静默跳过
                     }
                     val ctx = v.context
@@ -183,7 +184,9 @@ class MonitorFragment : Fragment() {
                     val current = try {
                         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0.0.0"
                     } catch (_: Exception) { "0.0.0" }
-                    if (!io.github.supit.rideassist.core.update.UpdateChecker.isOutdated(current, info.version)) return@launch
+                    val outdated = io.github.supit.rideassist.core.update.UpdateChecker.isOutdated(current, info.version)
+                    android.util.Log.d("UpdateChecker", "current=$current latest=${info.version} outdated=$outdated skipped=${io.github.supit.rideassist.core.update.UpdateChecker.isSkipped(prefs, info.version)}")
+                    if (!outdated) return@launch
                     if (io.github.supit.rideassist.core.update.UpdateChecker.isSkipped(prefs, info.version)) return@launch
                     com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
                         .setTitle("发现新版本 v${info.version}")

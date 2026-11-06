@@ -55,22 +55,26 @@ object UpdateChecker {
         var lastErr: Exception? = null
         for (u in urls) {
             try {
+                Log.d(TAG, "fetch try: $u")
                 val conn = URL(u).openConnection() as HttpURLConnection
                 conn.connectTimeout = 8000
                 conn.readTimeout = 8000
                 conn.setRequestProperty("Accept", "application/json")
+                Log.d(TAG, "fetch http ${conn.responseCode}")
                 if (conn.responseCode != 200) {
                     lastErr = IllegalStateException("HTTP ${conn.responseCode}")
                     continue
                 }
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
                 val o = JSONObject(body)
+                Log.d(TAG, "fetch ok: v${o.getString("version")}")
                 return@withContext UpdateInfo(
                     version = o.getString("version"),
                     notes = o.optString("notes", ""),
                     apkFile = o.getString("apk"),
                 )
             } catch (e: Exception) {
+                Log.d(TAG, "fetch failed: $e")
                 lastErr = e
             }
         }

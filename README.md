@@ -84,7 +84,7 @@ APP 底部四个标签页：
 
 最新 Debug 构建（免安装包名 `.debug` 后缀）：
 
-- [apk/RideAssist-v1.0.0-debug.apk](apk/RideAssist-v1.0.0-debug.apk)
+- [apk/RideAssist-v1.0.1-debug.apk](apk/RideAssist-v1.0.1-debug.apk)
 
 > Debug 构建仅用于体验与测试，日常使用建议自行编译 Release 版。
 
