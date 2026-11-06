@@ -266,6 +266,7 @@ class MonitorFragment : Fragment() {
                 layoutParams = android.widget.LinearLayout.LayoutParams(
                     0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 orientation = android.widget.LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL   // ⭐ 槽内内容居中（前后对称）
             }
             val labelView = android.widget.TextView(requireContext()).apply {
                 text = label
