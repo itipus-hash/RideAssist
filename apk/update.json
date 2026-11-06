@@ -1,6 +1,6 @@
 {
   "version": "1.0.5",
-  "notes": "首页底部导航「悬浮显示」改为「导航」",
+  "notes": "",
   "apk": "RideAssist-v1.0.5-debug.apk",
   "history": [
     {
@@ -17,7 +17,7 @@
     },
     {
       "version": "1.0.5",
-      "notes": "首页底部导航「悬浮显示」改为「导航」"
+      "notes": ""
     }
   ]
 }
