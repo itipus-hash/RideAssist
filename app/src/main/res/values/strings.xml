@@ -62,6 +62,7 @@
     <string name="label_cell_diff">压差</string>
     <string name="label_temp1">T1 温度</string>
     <string name="label_temp2">T2 温度</string>
+    <string name="label_temp3">温度3</string>
 
     <!-- 格式化 -->
     <string name="format_voltage">%.2fV</string>

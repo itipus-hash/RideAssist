@@ -710,72 +710,14 @@
                     android:layout_height="wrap_content"
                     android:text="@string/section_temp" />
 
+                <!-- ⭐ 温度槽位动态生成：默认显示 2 个（MOS+温度1），探头超过 2 个按实际显示；
+                     长按探头名可自定义（如 MOS 温度 → MOSS 温度），存 SP -->
                 <LinearLayout
+                    android:id="@+id/ll_temp_slots"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        style="@style/MetricContainer">
-
-                        <TextView
-                            style="@style/MetricLabel"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/label_mos_temp" />
-
-                        <TextView
-                            android:id="@+id/tv_mos_temp"
-                            style="@style/MetricValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            tools:text="33℃" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        style="@style/MetricContainer">
-
-                        <TextView
-                            style="@style/MetricLabel"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/label_temp1" />
-
-                        <TextView
-                            android:id="@+id/tv_temp1"
-                            style="@style/MetricValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            tools:text="30℃" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        style="@style/MetricContainer">
-
-                        <TextView
-                            style="@style/MetricLabel"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/label_temp2" />
-
-                        <TextView
-                            android:id="@+id/tv_temp2"
-                            style="@style/MetricValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            tools:text="未接" />
-                    </LinearLayout>
-                </LinearLayout>
+                    android:orientation="horizontal" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

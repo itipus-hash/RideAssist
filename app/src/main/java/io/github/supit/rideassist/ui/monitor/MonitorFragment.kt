@@ -235,6 +235,82 @@ class MonitorFragment : Fragment() {
         }, 3000L)
     }
 
+    /**
+     * ⭐ 温度卡动态槽位渲染。
+     *
+     * - 槽位 = MOS 温度 / 温度1 / 温度2 / 温度3（协议实际字段）
+     * - **默认显示 2 个**；探头读数超过 2 个按实际个数显示
+     * - 探头名可**长按自定义**（如「MOS 温度」→「MOSS 温度」），存 SP（空串=恢复默认）
+     */
+    private fun renderTempSlots(data: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData) {
+        val container = binding.llTempSlots
+        val prefs = io.github.supit.rideassist.YybmsAppHolder.from(requireContext()).prefs
+        data class Slot(val key: String, val defLabel: String, val value: Float?)
+        val slots = listOf(
+            Slot("mos", getString(R.string.label_mos_temp), data.mosTemp),
+            Slot("t1", getString(R.string.label_temp1), data.temp1),
+            Slot("t2", getString(R.string.label_temp2), data.temp2),
+            Slot("t3", getString(R.string.label_temp3), data.temp3),
+        )
+        // 显示个数：≥2，且覆盖到最后一个有读数的槽
+        val lastNonNull = slots.indexOfLast { it.value != null }
+        val count = maxOf(2, lastNonNull + 1).coerceAtMost(slots.size)
+
+        container.removeAllViews()
+        val abnormal = ContextCompat.getColor(requireContext(), R.color.abnormal)
+        val normal = ContextCompat.getColor(requireContext(), R.color.text_primary)
+        for (i in 0 until count) {
+            val slot = slots[i]
+            val label = prefs.tempLabel(slot.key) ?: slot.defLabel
+            val col = android.widget.LinearLayout(requireContext()).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                orientation = android.widget.LinearLayout.VERTICAL
+            }
+            val labelView = android.widget.TextView(requireContext()).apply {
+                text = label
+                setTextAppearance(R.style.MetricLabel)
+                setOnLongClickListener {
+                    editTempLabel(prefs, slot.key, slot.defLabel, label) { renderTempSlots(data) }
+                    true
+                }
+            }
+            val valueView = android.widget.TextView(requireContext()).apply {
+                text = slot.value?.let { getString(R.string.format_temp, it) }
+                    ?: getString(R.string.temp_none)
+                setTextAppearance(R.style.MetricValue)
+                setTextColor(
+                    if (slot.value != null && (slot.value > 60f || slot.value < -10f)) abnormal
+                    else normal
+                )
+            }
+            col.addView(labelView)
+            col.addView(valueView)
+            container.addView(col)
+        }
+    }
+
+    /** 长按探头名 → 输入框改名（空 = 恢复默认），保存后回调刷新 */
+    private fun editTempLabel(
+        prefs: io.github.supit.rideassist.data.prefs.AppPrefs,
+        key: String, defLabel: String, current: String,
+        onSaved: () -> Unit,
+    ) {
+        val input = android.widget.EditText(requireContext()).apply {
+            setText(current)
+            setSelection(text.length)
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("探头名称")
+            .setView(input)
+            .setPositiveButton(R.string.confirm) { _, _ ->
+                prefs.setTempLabel(key, input.text.toString().trim())
+                onSaved()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     private fun startClock() {
         val b = _binding ?: return
         clockHandler.removeCallbacks(clockTick)
@@ -1081,28 +1157,8 @@ class MonitorFragment : Fragment() {
             )
         )
 
-        // ---- 温度 ----
-        binding.tvTemp1.text = data.temp1?.let { getString(R.string.format_temp, it) }
-            ?: getString(R.string.temp_none)
-        binding.tvTemp2.text = data.temp2?.let { getString(R.string.format_temp, it) }
-            ?: getString(R.string.temp_none)
-        binding.tvMosTemp.text = data.mosTemp?.let { getString(R.string.format_temp, it) }
-            ?: getString(R.string.temp_none)
-        // 超温(>60℃) / 低温(<-10℃) 标红
-        binding.tvTemp1.setTextColor(
-            ContextCompat.getColor(
-                requireContext(),
-                if (data.temp1 != null && (data.temp1 > 60f || data.temp1 < -10f))
-                    R.color.abnormal else R.color.text_primary
-            )
-        )
-        binding.tvTemp2.setTextColor(
-            ContextCompat.getColor(
-                requireContext(),
-                if (data.temp2 != null && (data.temp2 > 60f || data.temp2 < -10f))
-                    R.color.abnormal else R.color.text_primary
-            )
-        )
+        // ---- 温度（动态槽位：默认 2 个，探头更多按实际；长按探头名可自定义） ----
+        renderTempSlots(data)
 
         // ---- 电池状态 ----
         // ⚠️⚠️ 三态严格区分，缺一不可：
