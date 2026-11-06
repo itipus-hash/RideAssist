@@ -268,31 +268,23 @@ class MonitorFragment : Fragment() {
         for (i in 0 until count) {
             val slot = slots[i]
             val label = prefs.tempLabel(slot.key) ?: slot.defLabel
-            val col = android.widget.LinearLayout(requireContext()).apply {
-                layoutParams = android.widget.LinearLayout.LayoutParams(
-                    0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                orientation = android.widget.LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER_HORIZONTAL   // ⭐ 槽内内容居中（前后对称）
+            // ⭐ 用 XML inflate（style 只能从布局应用）：等分 + 区域居中，与胎压卡同款
+            val col = layoutInflater.inflate(
+                io.github.supit.rideassist.R.layout.item_temp_slot, container, false)
+                as android.widget.LinearLayout
+            val labelView = col.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_temp_slot_label)
+            val valueView = col.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_temp_slot_value)
+            labelView.text = label
+            labelView.setOnLongClickListener {
+                editTempLabel(prefs, slot.key, slot.defLabel, label) { renderTempSlots(data) }
+                true
             }
-            val labelView = android.widget.TextView(requireContext()).apply {
-                text = label
-                setTextAppearance(R.style.MetricLabel)
-                setOnLongClickListener {
-                    editTempLabel(prefs, slot.key, slot.defLabel, label) { renderTempSlots(data) }
-                    true
-                }
-            }
-            val valueView = android.widget.TextView(requireContext()).apply {
-                text = slot.value?.let { getString(R.string.format_temp, it) }
-                    ?: getString(R.string.temp_none)
-                setTextAppearance(R.style.MetricValue)
-                setTextColor(
-                    if (slot.value != null && (slot.value > 60f || slot.value < -10f)) abnormal
-                    else normal
-                )
-            }
-            col.addView(labelView)
-            col.addView(valueView)
+            valueView.text = slot.value?.let { getString(R.string.format_temp, it) }
+                ?: getString(R.string.temp_none)
+            valueView.setTextColor(
+                if (slot.value != null && (slot.value > 60f || slot.value < -10f)) abnormal
+                else normal
+            )
             container.addView(col)
         }
     }
