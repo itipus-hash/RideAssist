@@ -1141,6 +1141,9 @@ class MonitorFragment : Fragment() {
         /** 权限申请记录，用于区分首次申请与永久拒绝 */
         private const val KEY_PERM_ASKED = "perm_asked"
 
+        /** ⭐ 更新检查防重入（Fragment add+show 会两次走 onViewCreated） */
+        private var updateCheckStarted = false
+
         /** 默认过滤关键词：只显示设备名含 YY 的设备 */
         private const val DEFAULT_KEYWORD = "YY"
 
