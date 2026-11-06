@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
-  "notes": "自动更新测试（模拟远端新版本，实际仍安装 1.0.1 包）",
+  "version": "1.0.1",
+  "notes": "",
   "apk": "RideAssist-v1.0.1-debug.apk"
 }
