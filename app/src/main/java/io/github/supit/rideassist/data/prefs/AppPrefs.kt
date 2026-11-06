@@ -66,6 +66,11 @@ class AppPrefs(context: Context) {
         get() = sp.getInt(KEY_TPMS_HIGH_TEMP, 60)
         set(value) = sp.edit { putInt(KEY_TPMS_HIGH_TEMP, value) }
 
+    /** ⭐ 应用内更新：用户选择「跳过此版本」时记录的版本号（同版本不再提醒） */
+    var updateSkippedVersion: String?
+        get() = sp.getString("update_skipped_version", null)
+        set(value) = sp.edit().putString("update_skipped_version", value).apply()
+
     /** 传感器电池型号（默认 CR1632，可改，方便更换时知道型号） */
     var tpmsBatteryModel: String
         get() = sp.getString(KEY_TPMS_BATTERY_MODEL, "CR1632") ?: "CR1632"

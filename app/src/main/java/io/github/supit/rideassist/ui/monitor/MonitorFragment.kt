@@ -142,6 +142,7 @@ class MonitorFragment : Fragment() {
         observeState()
         onPermissionChainStart()
         startClock()
+        checkAppUpdate()
         // ⭐ 单击电池参数卡进入诊断面板（隐藏入口）
         setupDiagGesture()
         setupTpms()
@@ -167,6 +168,49 @@ class MonitorFragment : Fragment() {
      * ⚠️ MainActivity 用 show/hide 切页，本页被 hide 时 onPause 不会走，
      * 所以这里在 [onHiddenChanged] 里也做一次开关管理，避免后台空转。
      */
+    /** ⭐ 应用内更新检查：延迟 3 秒（避开启动高峰），有新版本弹窗（可跳过此版本） */
+    private fun checkAppUpdate() {
+        view?.postDelayed({
+            view?.let { v ->
+                lifecycleScope.launch {
+                    val info = try {
+                        io.github.supit.rideassist.core.update.UpdateChecker.fetch()
+                    } catch (_: Exception) {
+                        return@launch   // 网络不通/仓库不可达：静默跳过
+                    }
+                    val ctx = v.context
+                    val prefs = io.github.supit.rideassist.data.prefs.AppPrefs(ctx)
+                    val current = try {
+                        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "0.0.0"
+                    } catch (_: Exception) { "0.0.0" }
+                    if (!io.github.supit.rideassist.core.update.UpdateChecker.isOutdated(current, info.version)) return@launch
+                    if (io.github.supit.rideassist.core.update.UpdateChecker.isSkipped(prefs, info.version)) return@launch
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                        .setTitle("发现新版本 v${info.version}")
+                        .setMessage(
+                            (info.notes.ifBlank { "问题修复与体验优化" }) +
+                                "\n\n当前版本 v$current"
+                        )
+                        .setPositiveButton("立即更新") { _, _ ->
+                            try {
+                                io.github.supit.rideassist.core.update.AppUpdater.startDownload(ctx, info)
+                                android.widget.Toast.makeText(
+                                    ctx, "开始下载更新…", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (_: Exception) {
+                                android.widget.Toast.makeText(
+                                    ctx, "下载失败，请稍后重试", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .setNeutralButton("跳过此版本") { _, _ ->
+                            io.github.supit.rideassist.core.update.UpdateChecker.markSkipped(prefs, info.version)
+                        }
+                        .setNegativeButton("稍后", null)
+                        .show()
+                }
+            }
+        }, 3000L)
+    }
+
     private fun startClock() {
         val b = _binding ?: return
         clockHandler.removeCallbacks(clockTick)

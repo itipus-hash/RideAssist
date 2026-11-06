@@ -101,9 +101,20 @@ def copy_to_apk_dir(apk_path, variant):
     size = os.path.getsize(dst) / 1024 / 1024
     print(f"[3/3] 已更新：apk/{named}  ({size:.1f} MB)")
 
+    # ⭐ 同步生成 update.json（应用内更新检查的版本信息源）
+    import json
+    notes = ""
+    for i, a in enumerate(sys.argv):
+        if a == "--notes" and i + 1 < len(sys.argv):
+            notes = sys.argv[i + 1]
+    update = {"version": version, "notes": notes, "apk": named}
+    with open(os.path.join(APK_DIR, "update.json"), "w", encoding="utf-8") as f:
+        json.dump(update, f, ensure_ascii=False, indent=2)
+    print(f"   update.json -> v{version}")
+
     # 自动提交到 git（失败不影响结果，用户可手动 commit）
     try:
-        subprocess.run(["git", "add", f"apk/{named}"], cwd=PROJECT_DIR,
+        subprocess.run(["git", "add", "apk/"], cwd=PROJECT_DIR,
                        capture_output=True)
         r = subprocess.run(
             ["git", "commit", "-q", "-m", f"build: 更新 apk/{named}"],
