@@ -1,33 +1,29 @@
 package io.github.supit.rideassist.core.update
 
 import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
-import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * 用系统 DownloadManager 下载更新 APK 并触发安装。
+ * 用系统 DownloadManager 下载更新 APK。
  *
- * 流程：enqueue（系统通知栏自带进度）→ ACTION_DOWNLOAD_COMPLETE →
- * FileProvider 暴露文件 → ACTION_INSTALL_PACKAGE 弹系统安装确认。
- *
- * ⚠️ 同签名 APK 才能覆盖安装：debug 构建与仓库里的 debug 包签名一致。
+ * 下载完成后由 [UpdateApkReceiver]（Manifest 静态 receiver）自动弹出安装——
+ * 用静态 receiver 是因为用户点完「立即更新」很可能切走 APP（进程被杀），
+ * 动态注册的 receiver 会随进程一起消失，下载完就「没反应」。
  */
 object AppUpdater {
-    private const val DOWNLOAD_ID_KEY = "update_download_id"
+    const val PREF_DOWNLOAD_ID = "update_download_id"
+    const val PREF_APK_FILE = "update_apk_file"
 
     fun startDownload(context: Context, info: UpdateChecker.UpdateInfo) {
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        // 清掉上一次的下载记录文件
+        // 清掉上一次的下载残留文件
         val old = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), info.apkFile)
         if (old.exists()) old.delete()
 
+        val sp = context.getSharedPreferences("yybms_prefs", Context.MODE_PRIVATE)
         var lastEx: Exception? = null
         for (url in info.downloadUrls()) {
             try {
@@ -38,34 +34,12 @@ object AppUpdater {
                     .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, info.apkFile)
                     .setAllowedOverMetered(true)
                 val id = dm.enqueue(req)
-                context.getSharedPreferences("yybms_prefs", Context.MODE_PRIVATE)
-                    .edit().putLong(DOWNLOAD_ID_KEY, id).apply()
-                // 只监听本次下载完成
-                context.registerReceiver(object : BroadcastReceiver() {
-                    override fun onReceive(c: Context, i: Intent) {
-                        if (i.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) != id) return
-                        try { c.unregisterReceiver(this) } catch (_: Exception) {}
-                        install(c, info)
-                    }
-                }, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                    if (Build.VERSION.SDK_INT >= 33) Context.RECEIVER_NOT_EXPORTED else 0)
+                sp.edit().putLong(PREF_DOWNLOAD_ID, id).putString(PREF_APK_FILE, info.apkFile).apply()
                 return
             } catch (e: Exception) {
                 lastEx = e
             }
         }
         throw lastEx ?: IllegalStateException("download failed")
-    }
-
-    private fun install(context: Context, info: UpdateChecker.UpdateInfo) {
-        val f = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), info.apkFile)
-        if (!f.exists() || f.length() < 1024) return   // 未下完/失败，静默放弃
-        val uri = FileProvider.getUriForFile(
-            context, context.packageName + ".fileprovider", f)
-        val i = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(i)
     }
 }
