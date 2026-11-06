@@ -252,9 +252,15 @@ class MonitorFragment : Fragment() {
             Slot("t2", getString(R.string.label_temp2), data.temp2),
             Slot("t3", getString(R.string.label_temp3), data.temp3),
         )
-        // 显示个数：≥2，且覆盖到最后一个有读数的槽
-        val lastNonNull = slots.indexOfLast { it.value != null }
-        val count = maxOf(2, lastNonNull + 1).coerceAtMost(slots.size)
+        // ⭐ 显示个数 = 1(MOS) + 设备上报的探头路数（tempProbeCount，实机 2 路 → 3 槽）。
+        //   ⚠️ 不能用「最后有读数的槽」：T3/T4 字节在 2 路机型上是别的数据，
+        //   解析出的 27.0℃ 是垃圾值，按读数显示就会冒出「温度3」（用户实测）。
+        //   未拿到探头数（未连接/0）时默认 2 槽。
+        val probeCount = data.tempProbeCount
+        val count = when {
+            probeCount > 0 -> (1 + probeCount).coerceAtMost(slots.size)
+            else -> 2
+        }
 
         container.removeAllViews()
         val abnormal = ContextCompat.getColor(requireContext(), R.color.abnormal)
