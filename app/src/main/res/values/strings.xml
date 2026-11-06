@@ -115,7 +115,7 @@
     <string name="power_discharging">放电中</string>
     <string name="power_charging">充电中</string>
     <!-- 「空闲中」已按用户要求删除：电流为 0 时连标签一起留空 -->
-    <string name="nav_overlay">悬浮显示</string>
+    <string name="nav_overlay">导航</string>
     <string name="overlay_perm_hint">需要悬浮窗权限，请在接下来的页面里允许「显示在其他应用上层」</string>
     <string name="overlay_on">悬浮胎压已显示（点击信息框返回本应用，长按关闭）</string>
     <string name="overlay_off">悬浮胎压已关闭</string>
