@@ -190,27 +190,35 @@ class MonitorFragment : Fragment() {
                     android.util.Log.d("UpdateChecker", "current=$current latest=${info.version} outdated=$outdated skipped=${io.github.supit.rideassist.core.update.UpdateChecker.isSkipped(prefs, info.version)}")
                     if (!outdated) return@launch
                     if (io.github.supit.rideassist.core.update.UpdateChecker.isSkipped(prefs, info.version)) return@launch
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                        .setTitle("发现新版本 v${info.version}")
-                        .setMessage(
-                            (info.notes.ifBlank { "问题修复与体验优化" }) +
-                                "\n\n当前版本 v$current"
-                        )
-                        .setPositiveButton("立即更新") { _, _ ->
-                            try {
-                                io.github.supit.rideassist.core.update.AppUpdater.startDownload(ctx, info)
-                                android.widget.Toast.makeText(
-                                    ctx, "开始下载更新…", android.widget.Toast.LENGTH_SHORT).show()
-                            } catch (_: Exception) {
-                                android.widget.Toast.makeText(
-                                    ctx, "下载失败，请稍后重试", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                    // ⭐ 自定义布局：三个按钮竖排全宽（系统三按钮挤一行太丑）
+                    val v2 = layoutInflater.inflate(io.github.supit.rideassist.R.layout.dialog_update, null)
+                    v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_title)
+                        .text = "发现新版本 v${info.version}"
+                    v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_msg)
+                        .text = (info.notes.ifBlank { "问题修复与体验优化" }) + "\n\n当前版本 v$current"
+                    val dlg = com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                        .setView(v2)
+                        .create()
+                    v2.findViewById<com.google.android.material.button.MaterialButton>(
+                        io.github.supit.rideassist.R.id.btn_update).setOnClickListener {
+                        dlg.dismiss()
+                        try {
+                            io.github.supit.rideassist.core.update.AppUpdater.startDownload(ctx, info)
+                            android.widget.Toast.makeText(
+                                ctx, "开始下载更新…", android.widget.Toast.LENGTH_SHORT).show()
+                        } catch (_: Exception) {
+                            android.widget.Toast.makeText(
+                                ctx, "下载失败，请稍后重试", android.widget.Toast.LENGTH_SHORT).show()
                         }
-                        .setNeutralButton("跳过此版本") { _, _ ->
-                            io.github.supit.rideassist.core.update.UpdateChecker.markSkipped(prefs, info.version)
-                        }
-                        .setNegativeButton("稍后", null)
-                        .show()
+                    }
+                    v2.findViewById<com.google.android.material.button.MaterialButton>(
+                        io.github.supit.rideassist.R.id.btn_later).setOnClickListener { dlg.dismiss() }
+                    v2.findViewById<com.google.android.material.button.MaterialButton>(
+                        io.github.supit.rideassist.R.id.btn_skip).setOnClickListener {
+                        dlg.dismiss()
+                        io.github.supit.rideassist.core.update.UpdateChecker.markSkipped(prefs, info.version)
+                    }
+                    dlg.show()
                 }
             }
         }, 3000L)
