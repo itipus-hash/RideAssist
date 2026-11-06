@@ -1273,7 +1273,8 @@ class RealtimeFragment : Fragment(), LocationListener {
                         decimals = currentDecimals(d.totalCurrent),
                         trackerNow = { tracker.currentNow = it },
                         currentAmp = d.totalCurrent,
-                        maxOverride = tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_CURRENT]?.value
+                        maxOverride = tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_CURRENT]?.value,
+                        alwaysRecord = true
                     )
                     renderCurve(
                         binding.chartDiff, tracker.diffPoints,
@@ -1381,7 +1382,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         decimals: Int = 0,
         trackerNow: (Float) -> Unit = {},
         currentAmp: Float = Float.NaN,
-        maxOverride: Float? = null
+        maxOverride: Float? = null,
+        alwaysRecord: Boolean = false,
     ) {
         // ⭐⭐ **未开始记录 → 一律不画**。
         //
@@ -1401,6 +1403,12 @@ class RealtimeFragment : Fragment(), LocationListener {
             // 否则切页回来走 redrawFromTracker 时读到的是初始 0，
             // 会出现「压差 0mV」这种明显错误（用户实测发现）。
             trackerNow(now)
+            // ⭐ 电流卡（alwaysRecord）：0A / 充电负电流也是有效状态，
+            //    始终入队 —— 否则右上角 Max/Min 在未骑行时永远空白
+            if (alwaysRecord) {
+                if (q.size >= MAX_POINTS) q.removeFirst()
+                q.addLast(now)
+            }
             // 保留队列不清空，一旦开动立刻能接着画
             chart.setSingleSeries(FloatArray(0))
             nowView.text = if (decimals > 0) String.format("%.${decimals}f", now)
