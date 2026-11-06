@@ -170,6 +170,8 @@ class MonitorFragment : Fragment() {
      */
     /** ⭐ 应用内更新检查：延迟 3 秒（避开启动高峰），有新版本弹窗（可跳过此版本） */
     private fun checkAppUpdate() {
+        if (updateCheckStarted) return   // ⭐ onViewCreated 可能触发两次（add+show），只查一次
+        updateCheckStarted = true
         view?.postDelayed({
             view?.let { v ->
                 lifecycleScope.launch {
