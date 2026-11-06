@@ -479,6 +479,14 @@ class RealtimeFragment : Fragment(), LocationListener {
         }
         apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_FRONT, b.tvClockTpmsFront)
         apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_REAR, b.tvClockTpmsRear)
+        // ⭐ 功率卡顶部胎压（用户要求）：非聚焦时显示；聚焦时隐藏（胎压在时间卡两侧已有）
+        if (focusedCardIndex != null) {
+            b.rowPowerTpms.visibility = View.GONE
+        } else {
+            b.rowPowerTpms.visibility = View.VISIBLE
+            apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_FRONT, b.tvPowerTpmsFront)
+            apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_REAR, b.tvPowerTpmsRear)
+        }
     }
 
     /** 应用显隐状态到实际视图。
