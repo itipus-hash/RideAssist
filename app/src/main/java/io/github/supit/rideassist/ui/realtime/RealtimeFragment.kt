@@ -1266,6 +1266,8 @@ class RealtimeFragment : Fragment(), LocationListener {
                         binding.tvPowerNow, binding.tvPowerStat, d.power, UNIT_WATT,
                         trackerNow = { tracker.powerNow = it },
                         maxOverride = tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_POWER]?.value
+                   ,
+                        alwaysRecord = true
                     )
                     renderCurve(
                         binding.chartCurrent, tracker.currentPoints,
@@ -1281,6 +1283,8 @@ class RealtimeFragment : Fragment(), LocationListener {
                         binding.tvDiffNow, binding.tvDiffStat, d.cellDiff, UNIT_MV,
                         trackerNow = { tracker.diffNow = it },
                         maxOverride = tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_DIFF]?.value
+                   ,
+                        alwaysRecord = true
                     )
                     // ⭐ 电量快照写进Tracker，供骑行页算「预计可行驶里程」
                     // 用协议的「电池剩余容量 Ah」，电压取**标称总压**——
