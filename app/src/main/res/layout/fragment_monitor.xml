@@ -705,6 +705,7 @@
                 android:padding="12dp">
 
                 <TextView
+                    android:id="@+id/tv_temp_title"
                     style="@style/CardTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

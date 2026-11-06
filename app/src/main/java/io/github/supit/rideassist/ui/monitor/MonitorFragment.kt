@@ -261,6 +261,11 @@ class MonitorFragment : Fragment() {
             probeCount > 0 -> (1 + probeCount).coerceAtMost(slots.size)
             else -> 2
         }
+        // ⭐ 标题显示路数（用户要求）：「温度 · 2路」——让槽位数量有依据
+        binding.tvTempTitle.text = if (probeCount > 0)
+            getString(R.string.section_temp) + " · ${probeCount}路"
+        else
+            getString(R.string.section_temp)
 
         container.removeAllViews()
         val abnormal = ContextCompat.getColor(requireContext(), R.color.abnormal)
