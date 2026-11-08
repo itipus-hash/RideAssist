@@ -129,7 +129,7 @@
     <string name="overlay_display_tpms_rear">后轮胎压</string>
     <string name="overlay_display_battery">电量</string>
     <string name="overlay_display_volts">电压</string>
-    <string name="overlay_display_max_speed">极速</string>
+    <string name="overlay_display_max_speed">速度_Max</string>
     <string name="overlay_display_amps">电流_Max</string>
     <string name="overlay_display_power">功率_Max</string>
     <string name="overlay_display_mostemp">MOS</string>

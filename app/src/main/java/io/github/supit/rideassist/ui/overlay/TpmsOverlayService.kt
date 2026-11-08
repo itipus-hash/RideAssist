@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
  *
  * ## 行显隐（用户要求）
  * - **每个信息单独一行**，开关打开的项目恒定占一行；没数据也**不隐藏**
- *   （整行写空白，不再是「标签  --」），行数不跳动
+ *   （保留项目名、数值留空，不再出现「--」），行数不跳动
  * - ⚠️ 唯一例外：前轮 / 后轮胎压**合并成一行**（两个开关仍独立、仍可排序）
  * - 「空格占位」项目 = 一条纯空白行
  * - 所有项目开关都关 → 整框隐藏
@@ -325,8 +325,8 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
     /**
      * 布局重建（开关/排序/字号变化时）。
      *
-     * - ⭐ **每个项目独占一行**，文字左对齐；数据无效也保留这一行（写空白），
-     *   行数恒定不跳动。
+     * - ⭐ **每个项目独占一行**，文字左对齐；数据无效也保留这一行
+     *   （保留项目名、数值留空），行数恒定不跳动。
      * - ⭐ **唯一例外**：前 / 后轮胎压合并到同一水平行。两个开关与排序位置仍
      *   各自独立，只是渲染时落到同一个 [tpmsPairRow] 里，谁在左由排序决定。
      *   间隔用真实 margin 而不是补空格字符 —— 字体宽度不可靠（本项目踩过）。
@@ -428,7 +428,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
             return
         }
         root.visibility = if (anySwitchOn) View.VISIBLE else View.INVISIBLE
-        // 行全部常驻（无数据写空白），不再需要「等待数据…」占位
+        // 行全部常驻（无数据只留项目名），不再需要「等待数据…」占位
         tvWaiting?.visibility = View.GONE
     }
 
@@ -448,12 +448,16 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
     }
 
     /**
-     * ⭐ **行恒显**：有值写「标签  值」，无值写**整行空白**（不再出现「--」）。
-     * 绝不 GONE —— 保留行高与行序，开关开着的项目始终占一行，
-     * 悬浮框高度不跳动。用一个空格而非空串，确保行高稳定。
+     * ⭐ **行恒显**：有值写「标签  值」，无值**只写项目名、数值留空**。
+     *
+     * ⚠️ 用户口径（09:30 纠正）：「没数据直接空白」指的是**数值**留白，
+     * 不是整行抹掉 —— 项目名必须一直在，否则悬浮框里几行空白根本看不出
+     * 开着的是哪几项。当然也不能再出现「--」。
+     * 绝不 GONE —— 保留行高与行序，悬浮框高度不跳动。
+     * ⚠️ 特例：「空格占位」项目不走这里，渲染层恒为纯空白行。
      */
     private fun showRow(tv: TextView, label: String, value: String?, alarm: Boolean = false) {
-        tv.text = if (value == null) " " else "$label  $value"
+        tv.text = if (value == null) label else "$label  $value"
         tv.setTextColor(
             if (value != null && alarm) getColor(R.color.abnormal) else themeTextColor
         )
