@@ -239,15 +239,8 @@ class DiagActivity : AppCompatActivity() {
         //    （用户 2026-11-08 实测「动态行怎么不在表格里」的根因就是它）。
         //    profile 的加载也挪到了 renderDevice 调用点。
 
-        // 均衡参数：无值时**整卡隐藏**（contentPadding 会留出一个空白格子，
-        // 用户 2026-11-08 要求删掉这个没内容的格子）
-        b.llAnchors.removeAllViews()
-        val anchors = d.protocolAnchors()
-        b.cardAnchors.visibility = if (anchors.isNotEmpty()) View.VISIBLE else View.GONE
-        if (anchors.isNotEmpty()) {
-            b.llAnchors.addView(sectionTitle("均衡参数"))
-            fillTable(b.llAnchors, header = null, rows = anchors, numericFrom = 1)
-        }
+        // ⚠️ 原来的「均衡参数」独立卡已删除：内容已并入保护板信息表
+        //    （用户 2026-11-08：上面已经有了，不要再单独搞一个格子）
     }
 
     /** 区块标题（卡片内的小标题），与隐形表格同字体风格 */
@@ -491,6 +484,8 @@ header?.let { addRow(it, isHeader = true) }
                 )
             )
             // ⭐ 均衡参数紧跟均衡状态（原来在独立的「均衡参数」卡里，合并进表）
+            //    这两项**也已进本地缓存**（BatterySnapshot 的 balanceCutoffVolt /
+            //    balanceDiffThreshold），所以断开后照样显示（用户 2026-11-08）
             if (d.balanceCutoffVolt > 0f) {
                 add(listOf("均衡截止电压", "%.3f V".format(d.balanceCutoffVolt)))
             }

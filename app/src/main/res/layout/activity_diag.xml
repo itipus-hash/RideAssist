@@ -187,22 +187,6 @@ style="@style/DiagCard">
          </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-            <!-- ⑥ 保护参数 -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_anchors"
-       style="@style/DiagCard">
-
-  <LinearLayout
-      style="@style/DiagTable">
-
-    <LinearLayout
-        android:id="@+id/ll_anchors"
-      android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-      android:orientation="vertical" />
-    </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_reset"
                 style="@style/Widget.Material3.Button.OutlinedButton"

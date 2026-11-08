@@ -90,7 +90,7 @@ data class DeviceProfile(
         if (cellCount > 0) row("实际串数", "$cellCount")
         if (tempProbeCount > 0) row("温度探头", "$tempProbeCount 路")
         if (ratedCapacity > 0f) row("额定容量", "%.1f Ah".format(ratedCapacity))
-        if (nominalTotalVolt > 0f) row("标称总压", "%.2f V".format(nominalTotalVolt))
+
         if (sleepTimeSec > 0) row("休眠时间", "${sleepTimeSec}S")
         return rows.map { listOf(it.first, it.second) }
     }

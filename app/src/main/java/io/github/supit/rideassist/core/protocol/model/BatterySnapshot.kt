@@ -55,6 +55,8 @@ data class BatterySnapshot(
         temp3 = temp3,
         balanceOn = balanceOn,
         balancingCells = balancingCells.split(',').mapNotNull { it.toIntOrNull() },
+        balanceCutoffVolt = balanceCutoffVolt,
+        balanceDiffThreshold = balanceDiffThreshold,
         firmwareVersion = firmware.ifBlank { "--" },
         hasDeviceData = false,
     )
