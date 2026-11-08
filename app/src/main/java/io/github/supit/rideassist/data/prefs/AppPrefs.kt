@@ -210,6 +210,16 @@ class AppPrefs(context: Context) {
     fun extraSpaceSize(n: Int): Int = sp.getInt("overlay_size_space_$n", 1)
     fun setExtraSpaceSize(n: Int, v: Int) = sp.edit { putInt("overlay_size_space_$n", v) }
 
+    /**
+     * ⭐⭐ **保护板阈值的本地快照**（`ProtectThresholds.encode()` 的原始字符串）。
+     *
+     * 存在这里而不是内存里，是为了「连上保护板的头一两秒」也有阈值可用 ——
+     * 否则那段时间只能照搬硬件告警位，充电刚结束会残留「单体过压」位导致误报。
+     */
+    var protectParamsRaw: String
+        get() = sp.getString("protect_params_cache", "") ?: ""
+        set(value) = sp.edit { putString("protect_params_cache", value) }
+
     /** ⭐ 悬浮项目成对重排的一次性标记 */
     var pairResetDone: Boolean
         get() = sp.getBoolean("overlay_pair_reset_done", false)

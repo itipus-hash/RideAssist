@@ -371,6 +371,11 @@ object YybmsPayloadParser {
             overVoltRecover = (r.le16(OFF_OVER_VOLT_REC) ?: 0).let { if (it in 1000..4000) it * 0.001f else 0f },
             underVoltRecover = (r.le16(OFF_UNDER_VOLT_REC) ?: 0).let { if (it in 1000..4000) it * 0.001f else 0f },
             hasProtectParams = true,
+            // ⭐ 本次是真的从设备读到了 0xA0 帧 → 不再是缓存值。
+            //    必须显式清零：base 可能是用本地缓存兜底过的数据，
+            //    不清零的话诊断面板会一直显示"来自本地缓存"。
+            protectParamsFromCache = false,
+            protectParamsSavedAtMs = 0L,
         )
         // ⭐⭐ 以下阈值让**电流类与温度类告警**也能用物理判据，
         // 与电压类统一到同一套模型（见 PROTOCOL_FIELDS.md 第九节）。

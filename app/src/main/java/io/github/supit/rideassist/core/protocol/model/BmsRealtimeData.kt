@@ -252,6 +252,19 @@ data class BmsRealtimeData(
      */
     val hasProtectParams: Boolean = false,
 
+    /**
+     * 阈值是否**来自本机缓存**（本会话还没读到 0xA0 帧）。
+     *
+     * ⚠️ 与 [hasProtectParams] 配套看：
+     * - `hasProtectParams=true && protectParamsFromCache=false` → 本次从设备读到的
+     * - `hasProtectParams=true && protectParamsFromCache=true`  → 用本机缓存兜底
+     * - `hasProtectParams=false` → 既没读到也没缓存，只能不做物理判定
+     */
+    val protectParamsFromCache: Boolean = false,
+
+    /** 缓存阈值的保存时刻（墙钟 ms）；0 = 无缓存 */
+    val protectParamsSavedAtMs: Long = 0L,
+
     // ---- 电池化学体系 ----
 
     /**
@@ -515,7 +528,21 @@ data class BmsRealtimeData(
      *    不能因为读不到阈值就变成「永远显示正常」这种安全性倒退。
      */
     fun effectiveAlarms(): List<AlarmFlag> {
-        if (!hasProtectParams) return alarmFlags
+        if (!hasProtectParams) {
+            // ⭐⭐ **没有任何阈值来源时，有物理阈值的项一律「不判定」**。
+            //
+            // 用户实测：充电结束后连上保护板会误报一次「单体过压」，
+            // 实测 4.145V、阈值未读到。根因就是这里原来直接 `return alarmFlags`
+            // —— 照搬硬件告警位，而充电末期的过压位带迟滞，充电结束后还残留着。
+            //
+            // 现在：没阈值 → 不做结论（诊断面板会明确写「未判定」），
+            // 只保留**无独立阈值**的项（欠压关断 / SOC 异常 / 采样与执行器失效），
+            // 这些本来就只能看硬件位。
+            //
+            // ⚠️ 安全窗口很小：连上后第一轮轮询就会读 0xA0，
+            // 且有本地缓存时 `hasProtectParams` 直接为 true，几乎不会走到这里。
+            return alarmFlags.filterNot { it.hasThreshold }
+        }
 
         val result = LinkedHashSet<AlarmFlag>()
         // ⭐ 统一规则：**有独立阈值的**（hasThreshold）一律重新物理判定，
@@ -630,64 +657,45 @@ data class BmsRealtimeData(
      * 等宽字体下按**显示宽度**对齐（中文算 2 格），三列全部对齐到各自最宽值。
      * 曾用 `｜` 分隔，因各行长度不同显得参差不齐，已改为空格补齐。
      */
-fun alarmDiagnostics(): List<List<String>> {
-        // ⚠️ 原先有「硬件位」一列（硬件位置位/硬件位未置），实测**全是「未置」**，
-        // 整列零信息量还占宽，已删除。现在只留三列：告警项 / 实测值 / 阈值。
+    fun alarmDiagnostics(): List<List<String>> {
+        // ⚠️ 只返回**原始单元格数据**，不在这里拼字符串。
+        // 对齐由 UI 层的隐形表格控件按列宽保证（见 DiagActivity.fillTable）。
+        //
+        // ⭐ 缺值一律显示 `-`（用户 2026-11-08 要求）：
+        // 阈值没读到 → `-`；实测值没数据 / 没探头 → `-`。
+        // 之前直接 format(0f) 会显示成「0.000V」，看起来像"阈值就是 0"，比不显示更误导。
         data class Row(val name: String, val measured: String, val limit: String)
         val rows = mutableListOf<Row>()
-        fun row(name: String, measured: String, threshold: String) {
-      rows.add(Row(name, measured, threshold))
+        fun row(name: String, measured: String, limit: String) {
+            rows.add(Row(name, measured, limit))
         }
-   row(
-      "单体过压",
-            "%.3fV".format(maxCellVolt), "%.3fV".format(overVoltSet),
-        )
+
+        fun mv(v: Float) = if (hasDeviceData) "%.3fV".format(v) else "-"
+        fun ma(v: Float) = if (hasDeviceData) "%.2fA".format(v) else "-"
+        fun mt(v: Float?) = if (hasDeviceData && v != null) "%.1f℃".format(v) else "-"
+        fun lv(v: Float) = if (v > 0f) "%.3fV".format(v) else "-"
+        fun lp(v: Float) = if (v > 0f) "%.2fV".format(v) else "-"
+        fun la(v: Float) = if (v > 0f) "%.1fA".format(v) else "-"
+        fun lt(v: Float) = if (v != 0f) "%.1f℃".format(v) else "-"
+
+        row("单体过压", mv(maxCellVolt), lv(overVoltSet))
+        row("单体欠压", mv(minCellVolt), lv(underVoltSet))
+        row("总压过压", if (hasDeviceData) "%.2fV".format(totalVoltage) else "-", lp(packOverVoltSet))
+        row("总压欠压", if (hasDeviceData) "%.2fV".format(totalVoltage) else "-", lp(packUnderVoltSet))
+        row("放电过流", ma(totalCurrent), la(overCurrentDischarge))
+        row("充电过流", ma(totalCurrent), la(overCurrentCharge))
+        row("短路", ma(totalCurrent), la(shortCircuitCurrent))
         row(
-"单体欠压",
-    "%.3fV".format(minCellVolt), "%.3fV".format(underVoltSet),
-  )
- row(
-      "总压过压",
-"%.2fV".format(totalVoltage), "%.2fV".format(packOverVoltSet),
+            "电池过温", mt(maxMeasuredTemp()),
+            lt(if (totalCurrent < 0f) overTempCharge else overTempDischarge)
         )
+        row("MOS 过温", mt(mosTemp), lt(mosOverTemp))
         row(
-       "总压欠压",
-            "%.2fV".format(totalVoltage), "%.2fV".format(packUnderVoltSet),
-        )
-   row(
-            "放电过流",
- "%.2fA".format(totalCurrent), "%.1fA".format(overCurrentDischarge),
-        )
-   row(
-"充电过流",
-"%.2fA".format(totalCurrent), "%.1fA".format(overCurrentCharge),
-        )
-        row(
-     "短路",
-  "%.2fA".format(totalCurrent), "%.1fA".format(shortCircuitCurrent),
-    )
-        val hi = maxMeasuredTemp()
-        row(
-     "电池过温",
- if (hi == null) "无探头" else "%.1f℃".format(hi),
-            "%.1f℃".format(if (totalCurrent < 0f) overTempCharge else overTempDischarge),
-    )
-        row(
-     "MOS 过温",
-      mosTemp?.let { "%.1f℃".format(it) } ?: "无探头",
-            "%.1f℃".format(mosOverTemp),
-        )
-        val lo = minMeasuredTemp()
-        row(
-            "电池低温",
-            if (lo == null) "无探头" else "%.1f℃".format(lo),
-            "%.1f℃".format(if (totalCurrent < 0f) underTempCharge else underTempDischarge),
+            "电池低温", mt(minMeasuredTemp()),
+            lt(if (totalCurrent < 0f) underTempCharge else underTempDischarge)
         )
 
-// ⚠️ 只返回**原始单元格数据**，不在这里拼字符串。
-        // 对齐由 UI 层的隐形表格控件（DiagTable）按列宽保证，
-        // 见 DiagActivity.fillTable()。这里补空格或画线都会因字体非严格等宽而失效。
- return rows.map { listOf(it.name, it.measured, it.limit) }
+        return rows.map { listOf(it.name, it.measured, it.limit) }
     }
 
     /**

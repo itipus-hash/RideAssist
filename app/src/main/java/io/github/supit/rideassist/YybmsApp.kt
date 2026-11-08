@@ -36,7 +36,8 @@ class YybmsApp : Application() {
     val bleManager: BleManager by lazy { BleManager(this, appScope, bleScanner) }
 
     val monitorRepository: MonitorRepository by lazy {
-        MonitorRepository(bleManager, appScope)
+        // prefs 用于保护板阈值的本地缓存（连上保护板前就能做物理判定）
+        MonitorRepository(bleManager, appScope, prefs)
     }
 
     /**

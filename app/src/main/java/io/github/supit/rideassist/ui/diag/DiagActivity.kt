@@ -214,13 +214,25 @@ class DiagActivity : AppCompatActivity() {
     }
 
 /** ⑤ 告警诊断 + ⑥ 保护参数 + 设备信息 —— 三块都用「隐形表格」控件渲染 */
-    private fun renderAlarms(d: BmsRealtimeData) {
+    private fun renderAlarms(raw: BmsRealtimeData) {
+        // ⭐⭐ 没有实时数据时，用**本地缓存的阈值**把表格撑起来（用户要求）：
+        //「可以直接显示本地化保存过的阈值，实测值显示 -」。
+        // 之前这里 `!hasDeviceData` 就整块 return 成「未连接设备」，
+        // 于是缓存阈值根本没机会展示 —— 等于阈值仍然要等保护板。
+        val cached = io.github.supit.rideassist.data.prefs.ProtectParamsStore
+            .load(YybmsAppHolder.from(this).prefs)
+        val d = if (!raw.hasProtectParams && cached != null) cached.applyTo(raw) else raw
+
         if (!d.hasDeviceData) {
-      val msg = getString(R.string.diag_no_device)
-       b.llAlarms.removeAllViews()
-            b.tvAlarms.text = msg
-       b.llIdentity.removeAllViews()
-        return
+            if (!d.hasProtectParams) {
+                // 既没有实时数据、也没有任何阈值来源：如实说"未连接"
+                b.llAlarms.removeAllViews()
+                b.tvAlarms.text = getString(R.string.diag_no_device)
+                b.llIdentity.removeAllViews()
+                return
+            }
+            // 有缓存阈值：继续往下渲染，实测值列会全是 "-"
+            b.llIdentity.removeAllViews()
         }
       fillTable(
     container = b.llAlarms,
@@ -230,7 +242,23 @@ class DiagActivity : AppCompatActivity() {
  numericFrom = 1,
       )
         val eff = d.effectiveAlarms()
-        b.tvAlarms.text = if (eff.isEmpty()) "生效告警：无" else "生效告警：" + eff.joinToString("  ") { it.label }
+        // ⭐ 阈值来源必须写出来（用户要求阈值固化到本地后能分辨来源）：
+        // 没读到 → 明确说"未判定"，而不是让表格里一片 "-" 看着像正常
+        b.tvAlarms.text = buildString {
+            append("阈值来源：")
+            append(
+                when {
+                    !d.hasProtectParams -> "未读到（电压 / 电流 / 温度类未判定）"
+                    d.protectParamsFromCache -> "本地缓存 " + savedAtText(d.protectParamsSavedAtMs)
+                    else -> "本次从保护板读到的"
+                }
+            )
+            append("\n")
+            append(
+                if (eff.isEmpty()) "生效告警：无"
+                else "生效告警：" + eff.joinToString("  ") { it.label }
+            )
+        }
 
 fillTable(b.llIdentity, header = null, rows = d.deviceIdentity(), numericFrom = Int.MAX_VALUE)
 
@@ -450,6 +478,19 @@ header?.let { addRow(it, isHeader = true) }
     }
 
     private fun fmt(v: Double, d: Int): String = String.format(Locale.US, "%.${d}f", v)
+
+    /** 本地缓存阈值的保存时刻，形如「（11-08 20:31 保存）」 */
+    private fun savedAtText(ms: Long): String {
+        if (ms <= 0L) return "（时间未知）"
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+        return String.format(
+            Locale.US, "（%02d-%02d %02d:%02d 保存）",
+            cal.get(java.util.Calendar.MONTH) + 1,
+            cal.get(java.util.Calendar.DAY_OF_MONTH),
+            cal.get(java.util.Calendar.HOUR_OF_DAY),
+            cal.get(java.util.Calendar.MINUTE)
+        )
+    }
 
     private fun fmtMs(ms: Long): String {
         val total = ms / 1000

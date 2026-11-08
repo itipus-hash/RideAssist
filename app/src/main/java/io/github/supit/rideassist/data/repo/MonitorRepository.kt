@@ -5,6 +5,10 @@ import io.github.supit.rideassist.core.ble.ConnectionState
 import io.github.supit.rideassist.core.protocol.YybmsCommand
 import io.github.supit.rideassist.core.protocol.YybmsPayloadParser
 import io.github.supit.rideassist.core.protocol.model.BmsRealtimeData
+import io.github.supit.rideassist.core.protocol.model.ProtectThresholds
+import io.github.supit.rideassist.data.prefs.AppPrefs
+import io.github.supit.rideassist.data.prefs.ProtectParamsStore
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,10 +28,24 @@ import kotlinx.coroutines.launch
  */
 class MonitorRepository(
     private val bleManager: BleManager,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    /** 保护板阈值的本地缓存读写（见 [ProtectParamsStore]） */
+    private val prefs: AppPrefs,
 ) {
 
     companion object {
+        private const val TAG = "MonitorRepository"
+
+        /**
+         * 保护参数（0xA0）的校准周期：每 N 轮轮询读一次。
+         *
+         * 用户明确要求「不要反复读取」。旧实现把它混在每秒的
+         * `YybmsCommand.entries.forEach` 里，等于每秒读一次 167 字节的静态配置帧。
+         * 现在：连接后第一轮读一次（拿最新值），之后 300 轮（≈5 分钟）校准一次；
+         * 只有值真的变了才覆盖本地缓存。
+         */
+        const val PROTECT_PARAM_EVERY_ROUNDS = 300
+
         /** 需求：1 秒刷新一次 */
         const val POLL_INTERVAL_MS = 1_000L
 
@@ -69,7 +87,30 @@ class MonitorRepository(
         collectorJob = scope.launch {
             bleManager.receivedFrames.collect { frame ->
                 val previous = _realtime.value
-                val merged = YybmsPayloadParser.parse(frame, previous)
+                val parsed = YybmsPayloadParser.parse(frame, previous)
+
+                // ⭐⭐ **0xA0 帧解析成功 → 与本地缓存比较，有变化才写盘**。
+                //    用户要求「读到有变化就覆盖阈值，但不要反复读取」，
+                //    所以这里只做"存"，不做"定时刷"。
+                if (parsed.hasProtectParams &&
+                    YybmsCommand.fromResponseLength(frame.size) == YybmsCommand.READ_PROTECT_PARAM
+                ) {
+                    val fresh = ProtectThresholds.of(parsed, System.currentTimeMillis())
+                    if (ProtectParamsStore.saveIfChanged(prefs, fresh)) {
+                        Log.i(TAG, "保护参数已更新到本地缓存")
+                    }
+                }
+
+                // ⭐⭐ 本会话还没读到 0xA0 帧 → 用**本地缓存**兜底。
+                //    这是「充电结束后连上就误报单体过压」的正解：
+                //    连上头一两秒也有阈值可以做物理判定，
+                //    不再只能照搬保护板硬件告警位（那位带迟滞，会残留）。
+                val merged = if (parsed.hasProtectParams) {
+                    parsed
+                } else {
+                    ProtectParamsStore.load(prefs)?.applyTo(parsed) ?: parsed
+                }
+
                 _realtime.value = merged
 
                 appendTrend(merged)
@@ -135,16 +176,29 @@ class MonitorRepository(
     private fun startPolling() {
         if (pollJob?.isActive == true) return
         pollJob = scope.launch {
+            var round = 0
             while (isActive) {
+                // ⭐ 保护参数（0xA0）：**不再每秒读**。
+                //    连接后第一轮读一次拿最新值，之后每 PROTECT_PARAM_EVERY_ROUNDS
+                //    轮校准一次（≈5 分钟）；读到有变化才覆盖本地缓存。
+                if (round % PROTECT_PARAM_EVERY_ROUNDS == 0) {
+                    bleManager.sendReadCommand(YybmsCommand.READ_PROTECT_PARAM)
+                    delay(FRAME_GAP_MS)
+                }
+
                 // ⚠️ 逐条下发且**每条之间留间隔**。
                 // 官方 `InfoActivity_YY` 在两条命令之间 `Thread.sleep(200)`，
                 // 无间隔连发会写爆 GATT 队列（日志实测：`写入被拒绝 status!=GATT_SUCCESS`），
                 // 导致设备不回包、数据全为0。
-                YybmsCommand.entries.forEach { cmd ->
-                    if (!isActive) return@launch
-                    bleManager.sendReadCommand(cmd)
-                    delay(FRAME_GAP_MS)
-                }
+                YybmsCommand.entries
+                    .filter { it != YybmsCommand.READ_PROTECT_PARAM }
+                    .forEach { cmd ->
+                        if (!isActive) return@launch
+                        bleManager.sendReadCommand(cmd)
+                        delay(FRAME_GAP_MS)
+                    }
+
+                round++
                 delay(POLL_INTERVAL_MS)
             }
         }
