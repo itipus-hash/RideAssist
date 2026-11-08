@@ -171,13 +171,14 @@ class DiagActivity : AppCompatActivity() {
                 appendLine("实测有效容量　${fmt(s.measuredCapacityAh.toDouble(), 2)} Ah")
                 appendLine("实测 SOH　　　${fmt(s.measuredSoh.toDouble(), 1)} %")
             } else {
-                // ⚠️ 不能分两行（用户要求）：合并成一行，靠缩短文案放得下
+                // 用户定的版式：主行只说"样本不足"，说明**另起一行且不带括号**
+                // （原来挤在括号里自动折行，看着像排版坏了）
+                appendLine("实测有效容量　样本不足")
                 append(
-                    "实测有效容量　样本不足（已跟踪 SOC 跨度 %.1f%%，需满 %d%%）"
-                        .format(
-                            s.socSpanTracked,
-                            SessionSpeedTracker.MIN_SOC_SPAN_FOR_CAPACITY.toInt()
-                        )
+                    "已跟踪 SOC 跨度 %.1f%%，需满 %d%%".format(
+                        s.socSpanTracked,
+                        SessionSpeedTracker.MIN_SOC_SPAN_FOR_CAPACITY.toInt()
+                    )
                 )
             }
         }
