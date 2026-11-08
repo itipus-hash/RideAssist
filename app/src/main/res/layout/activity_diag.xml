@@ -70,6 +70,39 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+
+<!-- 本机设备身份：读不到的项不显示 -->
+<!-- ⚠️ 用 LinearLayout 当「隐形表格」容器，不用 TextView 拼空格：
+实机 monospace 字体里 ─ │ 等制表符并非等宽，画线会断成虚线 -->
+     <com.google.android.material.card.MaterialCardView
+            style="@style/DiagCard">
+
+        <LinearLayout
+  style="@style/DiagTable">
+
+            <LinearLayout
+      android:id="@+id/ll_identity"
+     android:layout_width="match_parent"
+           android:layout_height="wrap_content"
+  android:orientation="vertical" />
+
+            <!-- ⭐ 电池实况的动态量（温度 / 断开标注）：与静态表同一张卡 -->
+            <TextView
+                style="@style/DiagText"
+                android:id="@+id/tv_device"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+            <!-- ④ 派生指标 -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/DiagCard">
+
+                <TextView
+                    style="@style/DiagText"
+                    android:id="@+id/tv_derived" />
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- ============ BMS 报警（自设置页迁入并改名，用户要求） ============ -->
             <com.google.android.material.card.MaterialCardView
                 style="@style/DiagCard">
@@ -132,38 +165,6 @@
                             android:scaleY="0.85" />
                     </LinearLayout>
                 </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-<!-- 本机设备身份：读不到的项不显示 -->
-<!-- ⚠️ 用 LinearLayout 当「隐形表格」容器，不用 TextView 拼空格：
-实机 monospace 字体里 ─ │ 等制表符并非等宽，画线会断成虚线 -->
-     <com.google.android.material.card.MaterialCardView
-            style="@style/DiagCard">
-
-        <LinearLayout
-  style="@style/DiagTable">
-
-            <LinearLayout
-      android:id="@+id/ll_identity"
-     android:layout_width="match_parent"
-           android:layout_height="wrap_content"
-  android:orientation="vertical" />
-
-            <!-- ⭐ 电池实况的动态量（温度 / 断开标注）：与静态表同一张卡 -->
-            <TextView
-                style="@style/DiagText"
-                android:id="@+id/tv_device"
-                android:layout_marginTop="6dp" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-            <!-- ④ 派生指标 -->
-            <com.google.android.material.card.MaterialCardView
-                style="@style/DiagCard">
-
-                <TextView
-                    style="@style/DiagText"
-                    android:id="@+id/tv_derived" />
             </com.google.android.material.card.MaterialCardView>
 
 <!-- ⑤ 告警诊断 -->
