@@ -82,7 +82,7 @@ class AlarmFallbackTest {
 
     @Test fun `既无数据也无阈值时两列都是短横线`() {
         val rows = BmsRealtimeData(hasDeviceData = false).alarmDiagnostics()
-        val mos = rows.first { it[0] == "MOS 过温" }
+        val mos = rows.first { it[0] == "MOS过温" }
         assertEquals("-", mos[1])
         assertEquals("-", mos[2])
     }

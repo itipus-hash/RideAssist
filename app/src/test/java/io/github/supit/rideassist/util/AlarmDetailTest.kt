@@ -36,7 +36,7 @@ class AlarmDetailTest {
 
     @Test fun `MOS 过温必须写出实测温度与本机阈值`() {
         val text = AlarmDetail.build(base, listOf(AlarmFlag.OVER_TEMP_MOS))
-        assertTrue(text, text.contains("MOS 过温"))
+        assertTrue(text, text.contains("MOS过温"))
         assertTrue(text, text.contains("96.0 ℃"))
         assertTrue(text, text.contains("95.0 ℃"))
         assertTrue(text, text.contains("＞"))
@@ -68,7 +68,7 @@ class AlarmDetailTest {
         val text = AlarmDetail.build(
             base, listOf(AlarmFlag.OVER_TEMP_MOS, AlarmFlag.VOLT_SENSOR_FAIL)
         )
-        assertTrue(text, text.contains("MOS 过温"))
+        assertTrue(text, text.contains("MOS过温"))
         assertTrue(text, text.contains("电压失效"))
         assertTrue(text, text.contains("按保护板硬件告警位判定"))
     }
