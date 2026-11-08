@@ -86,16 +86,17 @@ data class DeviceProfile(
         if (firmwareVersion.isNotEmpty() && firmwareVersion != "--") row("版本", firmwareVersion)
         if (serialNumber.isNotEmpty()) row("SN", serialNumber)
         if (batteryType >= 0) row("电池类型", batteryTypeName(batteryType))
-        // ⭐ 最大串数与实际串数合并成一行（用户 2026-11-09：一行够了）
-        if (maxCellNumSupported > 0) {
-            row(
-                "最大串数",
-                if (cellCount > 0) "$maxCellNumSupported / 实际 $cellCount"
-                else "$maxCellNumSupported"
-            )
+        // ⭐ 「电芯数量」一行（用户 2026-11-09）：17串/20串(最大支持)
+        val cells = when {
+            cellCount > 0 && maxCellNumSupported > 0 ->
+                "${cellCount}串/${maxCellNumSupported}串(最大支持)"
+            maxCellNumSupported > 0 -> "${maxCellNumSupported}串(最大支持)"
+            cellCount > 0 -> "${cellCount}串"
+            else -> null
         }
+        if (cells != null) row("电芯数量", cells)
         if (tempProbeCount > 0) row("温度探头", "$tempProbeCount 路")
-        if (ratedCapacity > 0f) row("额定容量", "%.1f Ah".format(ratedCapacity))
+
 
         if (sleepTimeSec > 0) row("休眠时间", "${sleepTimeSec}S")
         return rows.map { listOf(it.first, it.second) }

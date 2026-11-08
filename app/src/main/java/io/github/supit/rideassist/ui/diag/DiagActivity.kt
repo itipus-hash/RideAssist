@@ -223,7 +223,7 @@ class DiagActivity : AppCompatActivity() {
             append(
                 when {
                     !d.hasProtectParams -> "未读到（电压 / 电流 / 温度类未判定）"
-                    d.protectParamsFromCache -> "本地缓存 " + savedAtText(d.protectParamsSavedAtMs)
+                    d.protectParamsFromCache -> savedAtText(d.protectParamsSavedAtMs)
                     else -> "本次从保护板读到的"
                 }
             )
@@ -467,12 +467,26 @@ header?.let { addRow(it, isHeader = true) }
             // ⭐ 循环次数**单独一行**，位置在「电池类型」上面（用户 2026-11-09）。
             //    SOC 与剩余容量合并成另一行（见下方动态区）。
             val cycleRow = listOf("循环次数", "%d 次".format(d.cycleCount))
+            // ⭐ SOC 紧跟在循环次数下面（用户 2026-11-09）：
+            //    98% · 68.60Ah / 70.00Ah（剩余 / 额定）
+            val socRow = listOf(
+                "SOC",
+                "%d%% · %.2fAh / %.2fAh".format(
+                    d.soc.toInt(), d.remainingCapacity, d.ratedCapacity
+                )
+            )
             val battIdx = base.indexOfFirst { it[0] == "电池类型" }
             base.forEachIndexed { i, row ->
-                if (i == battIdx) add(cycleRow)
+                if (i == battIdx) {
+                    add(cycleRow)
+                    add(socRow)
+                }
                 add(row)
             }
-            if (battIdx < 0) add(cycleRow)
+            if (battIdx < 0) {
+                add(cycleRow)
+                add(socRow)
+            }
             base.forEachIndexed { i, row ->
                 if (i == probeIdx && tempText.isNotBlank()) add(listOf("温度", tempText))
             }
@@ -481,13 +495,6 @@ header?.let { addRow(it, isHeader = true) }
                 listOf(
                     "电压/电流/功率",
                     "%.2fV / %.2fA / %.0fW".format(d.totalVoltage, d.totalCurrent, d.power)
-                )
-            )
-            // ⭐ SOC 与剩余容量合并一行（额定容量另有独立行，这里只放当前剩余值）
-            add(
-                listOf(
-                    "SOC",
-                    "%d %% / %.2f Ah".format(d.soc.toInt(), d.remainingCapacity)
                 )
             )
             add(
@@ -520,7 +527,7 @@ header?.let { addRow(it, isHeader = true) }
         // ⭐ 动态量已在上方表格里（总压/SOC/循环/均衡/温度），
         //    这里只放**表格放不下的长文本**：断开标注
         b.tvDevice.text = if (!live && savedAtMs > 0L) {
-            "（${formatStamp(savedAtMs)} 缓存数据。）"
+            savedAtText(savedAtMs)
         } else ""
     }
 
@@ -548,10 +555,10 @@ header?.let { addRow(it, isHeader = true) }
         )
     }
 
-    /** 本地缓存阈值的保存时刻，形如「（11-08 20:31 保存）」 */
+    /** 本地缓存标注，形如「本地缓存(11-08 23:41 保存)」 */
     private fun savedAtText(ms: Long): String {
-        if (ms <= 0L) return "（时间未知）"
-        return "（${formatStamp(ms)} 保存）"
+        if (ms <= 0L) return "本地缓存(时间未知)"
+        return "本地缓存(${formatStamp(ms)} 保存)"
     }
 
     private fun fmtMs(ms: Long): String {
