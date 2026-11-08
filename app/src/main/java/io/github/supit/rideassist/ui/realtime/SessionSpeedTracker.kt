@@ -2,6 +2,8 @@ package io.github.supit.rideassist.ui.realtime
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import io.github.supit.rideassist.core.gate.MoveGate
+import io.github.supit.rideassist.util.SpeedDisplay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,8 +40,38 @@ class SessionSpeedTracker : ViewModel() {
     val speedRevisionFlow: StateFlow<Long> = _speedRevision.asStateFlow()
 
     /**
+     * ⭐⭐ 末次「有电流证据」的墙钟时刻（ms）。
+     *
+     * 用户判据（2026-11-08）：「如果电流一直是 0，那么速度保持为 0」——
+     * 静止时 GPS 漂移 1~5 km/h 不该被记进会话极速。
+     * 这份状态**只在这里**（Application 级单例）维护一份；实时页与悬浮
+     * 前台服务两条 GPS 订阅都只读 [speedAllowedByCurrent]，不各自记时间。
+     */
+    @Volatile
+    var lastCurrentEvidenceMs: Long = 0L
+        private set
+
+    /**
+     * 每帧 BMS 数据喂一次。只有「有设备数据 且 电流达到 [MoveGate.TH_CURRENT_A]」
+     * 才算证据 —— 阈值复用全项目唯一判据，禁止另写 `abs(I) >= X`。
+     * 断连帧不刷新也不清零，交给宽限期自然过期。
+     */
+    fun noteCurrentEvidence(absAmps: Float, hasDeviceData: Boolean) {
+        if (hasDeviceData && absAmps >= MoveGate.TH_CURRENT_A) {
+            lastCurrentEvidenceMs = System.currentTimeMillis()
+        }
+    }
+
+    /** 当前是否允许把 GPS 速度当真（持续无电流证据超过宽限期 → false） */
+    val speedAllowedByCurrent: Boolean
+        get() = System.currentTimeMillis() - lastCurrentEvidenceMs <=
+            SpeedDisplay.NO_CURRENT_GRACE_MS
+
+    /**
      * ⭐⭐ **会话极速的唯一写入口**。
      * 实时页与悬浮前台服务两条 GPS 订阅都调它，口径由 SpeedDisplay.Filter 统一。
+     * ⚠️ 传入的 shownKmh 必须已过 [speedAllowedByCurrent] 门控，
+     *    静止漂移应在 Filter 里就被压成 0。
      * @return true = 刷新了记录（触发订阅方重渲）
      */
     fun noteSpeed(shownKmh: Int): Boolean {
@@ -967,6 +999,7 @@ class SessionSpeedTracker : ViewModel() {
      */
     fun resetSession() {
         maxSpeed = 0
+        lastCurrentEvidenceMs = 0L
         rideStartWallMs = 0
         rideMovingMs = 0
         rideLastTickMs = 0

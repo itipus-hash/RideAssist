@@ -10,52 +10,57 @@ import org.junit.Test
 /**
  * ⭐⭐ 两条 GPS 订阅（实时页 / 悬浮前台服务）共用 [SpeedDisplay] 的口径。
  *
- * 悬浮服务是这次为修「极速退后台冻结」新加的第二条订阅。两条订阅各持一个
+ * 悬浮服务是修「极速退后台冻结」时加的第二条订阅。两条订阅各持一个
  * Filter 实例，但只要有一路偷偷改了低通系数 / 归零阈值 / 取整方式，
  * 同一时刻的 Max 与页面大字就会对不上 —— 这类「判据分裂」是本项目老坑。
- * 这里锁住口径，以及会话极速的单调性与「只在变更时通知」语义。
+ *
+ * 2026-11-08 追加：**电流持续为 0 时速度必须锁 0**，用户原话
+ * 「速度怎么会有 5km/h，这个大概率偏移造成啊，如果电流一直是0，
+ * 那么速度保持为0」。下面同时锁住显示口径与电流证据状态。
  */
 class SpeedDisplayTest {
+
+    // ==================== 正常路径（有电流证据） ====================
 
     @Test fun `首帧直接采用原始速度不做平滑`() {
         val f = SpeedDisplay.Filter()
         assertNull(f.realSpeed)
-        assertEquals(30, f.push(30f))
+        assertEquals(30, f.push(30f, true))
         assertEquals(30f, f.realSpeed!!, 1e-4f)
     }
 
     @Test fun `第二帧起按 SMOOTH_ALPHA 低通`() {
         val f = SpeedDisplay.Filter()
-        f.push(0f)
-        assertEquals(30, f.push(100f))              // 0 + (100 - 0) * 0.3 = 30
+        f.push(0f, true)
+        assertEquals(30, f.push(100f, true))              // 0 + (100 - 0) * 0.3 = 30
         assertEquals(30f, f.realSpeed!!, 1e-4f)
     }
 
     @Test fun `低于阈值显示归零但真实速度仍保留给移动判定`() {
         val f = SpeedDisplay.Filter()
-        assertEquals(0, f.push(4.9f))
+        assertEquals(0, f.push(4.9f, true))
         assertEquals(4.9f, f.realSpeed!!, 1e-4f)
     }
 
     @Test fun `恰好到阈值开始显示整数速度`() {
         val f = SpeedDisplay.Filter()
-        assertEquals(5, f.push(5f))
-        assertEquals(7, f.push(12f))                // 5 + (12 - 5) * 0.3 = 7.1 → 7
+        assertEquals(5, f.push(5f, true))
+        assertEquals(7, f.push(12f, true))                // 5 + (12 - 5) * 0.3 = 7.1 → 7
     }
 
     @Test fun `reset 后不接着旧值平滑`() {
         val f = SpeedDisplay.Filter()
-        f.push(80f)
+        f.push(80f, true)
         f.reset()
         assertNull(f.realSpeed)
-        assertEquals(10, f.push(10f))
+        assertEquals(10, f.push(10f, true))
     }
 
     @Test fun `两个订阅源的 Filter 状态互不干扰`() {
         val page = SpeedDisplay.Filter()
         val overlay = SpeedDisplay.Filter()
-        page.push(60f)
-        assertEquals(20, overlay.push(20f))         // 另一路仍是首帧
+        page.push(60f, true)
+        assertEquals(20, overlay.push(20f, true))         // 另一路仍是首帧
         assertEquals(60f, page.realSpeed!!, 1e-4f)
     }
 
@@ -83,5 +88,57 @@ class SpeedDisplayTest {
         t.resetSession()
         assertEquals(0, t.maxSpeed)
         assertTrue(t.speedRevisionFlow.value > before)
+    }
+
+    // ==================== ⭐ 电流门控：静止漂移不得变成速度 ====================
+
+    @Test fun `电流持续为 0 时速度锁 0 且清空低通序列`() {
+        val f = SpeedDisplay.Filter()
+        f.push(60f, true)
+        assertEquals(0, f.push(7f, false))
+        // realSpeed 必须为 null：MoveGate 第三路速度证据要一起失效，
+        // 否则会出现「大字 0 但里程 / 极速还在涨」的老问题
+        assertNull(f.realSpeed)
+    }
+
+    @Test fun `恢复电流证据后首帧直接采用真实速度不被旧 0 拖累`() {
+        val f = SpeedDisplay.Filter()
+        f.push(60f, true)
+        f.push(3f, false)
+        assertEquals(42, f.push(42f, true))
+    }
+
+    @Test fun `静止漂移连续喂入一百帧也累积不出极速`() {
+        val f = SpeedDisplay.Filter()
+        repeat(100) { assertEquals(0, f.push(4.9f, false)) }
+        assertNull(f.realSpeed)
+    }
+
+    @Test fun `有电流证据才允许速度 断连帧不刷新`() {
+        val t = SessionSpeedTracker()
+        assertFalse(t.speedAllowedByCurrent)              // 从未有过证据
+        t.noteCurrentEvidence(0f, true)                   // 电流 0 → 不算证据
+        assertFalse(t.speedAllowedByCurrent)
+        t.noteCurrentEvidence(2.5f, true)                 // ≥ MoveGate.TH_CURRENT_A
+        assertTrue(t.speedAllowedByCurrent)
+        t.noteCurrentEvidence(9f, false)                  // 断连帧不刷新
+        assertTrue(t.speedAllowedByCurrent)
+    }
+
+    @Test fun `resetSession 连电流证据一起清掉`() {
+        val t = SessionSpeedTracker()
+        t.noteCurrentEvidence(3f, true)
+        assertTrue(t.speedAllowedByCurrent)
+        t.resetSession()
+        assertFalse(t.speedAllowedByCurrent)
+    }
+
+    @Test fun `静止门控下 noteSpeed 收到 0 不会刷新极速`() {
+        val t = SessionSpeedTracker()
+        val before = t.speedRevisionFlow.value
+        val f = SpeedDisplay.Filter()
+        repeat(60) { t.noteSpeed(f.push(4.9f, false)) }
+        assertEquals(0, t.maxSpeed)
+        assertEquals(before, t.speedRevisionFlow.value)
     }
 }

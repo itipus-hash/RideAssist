@@ -144,6 +144,19 @@
     <string name="overlay_item_alpha_short">透明度</string>
     <string name="overlay_auto_on_nav">导航后自动悬浮显示</string>
     <string name="overlay_jump_on_nav">导航后跳转页面</string>
+    <!-- ⭐ 悬浮字体颜色：一个按钮，点击弹列表，选完按钮本身染成所选颜色 -->
+    <string name="overlay_text_color_label">悬浮字体颜色</string>
+    <string name="overlay_text_color_title">选择悬浮字体颜色</string>
+    <string name="overlay_text_color_auto">自动</string>
+    <string name="overlay_text_color_white">白色</string>
+    <string name="overlay_text_color_black">黑色</string>
+    <string name="overlay_text_color_red">红色</string>
+    <string name="overlay_text_color_orange">橙色</string>
+    <string name="overlay_text_color_yellow">黄色</string>
+    <string name="overlay_text_color_green">绿色</string>
+    <string name="overlay_text_color_cyan">青色</string>
+    <string name="overlay_text_color_blue">蓝色</string>
+    <string name="overlay_text_color_purple">紫色</string>
     <string name="overlay_bg_solid">不透明</string>
     <string name="overlay_bg_semi">半透明</string>
     <string name="overlay_bg_light">较透明</string>

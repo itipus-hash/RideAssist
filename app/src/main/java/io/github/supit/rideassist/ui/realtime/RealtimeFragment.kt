@@ -129,6 +129,21 @@ class RealtimeFragment : Fragment(), LocationListener {
         override fun run() {
             val est = lossEstimator
             if (gpsLostSinceMs == 0L) return
+            // ⭐⭐ 与 renderSpeed 同一门控：丢失期间若电流证据过期（车已停），
+            //    推算/保持速度一律归零并结束丢失态，不许继续往曲线里写旧速度。
+            if (!tracker.speedAllowedByCurrent) {
+                gpsLostHandler.removeCallbacks(this)
+                clearGpsLostState()
+                speedFilter.reset()
+                tracker.liveSpeedKmh = null
+                hasSpeedSignal = false
+                pushSpeedSample(0)
+                val b0 = _binding ?: return
+                b0.tvSpeedNow.text = "0"
+                renderSpeedColors(0)
+                applySpeedMax()
+                return
+            }
             // 推进推算（超过 60 秒后内部会自动改为「保持」）
             est?.update(SystemClock.elapsedRealtime())
             val shown = if (est != null && est.isEstimating) est.estimatedSpeed.toInt()
@@ -877,9 +892,12 @@ class RealtimeFragment : Fragment(), LocationListener {
 
         val kmh = loc.speed * 3.6f
         hasSpeedSignal = true
-        // ⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径）
-        val shown = speedFilter.push(kmh)
-        // ⭐ 把低通后的真实速度共享给应用级采集器（MoveGate 第三路证据）
+        // ⭐⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径），
+        //    并显式传电流门控：电流持续为 0 时静止 GPS 漂移一律压成 0，
+        //    不许记进会话极速 / 曲线 / MoveGate 第三路证据。
+        val shown = speedFilter.push(kmh, tracker.speedAllowedByCurrent)
+        // ⭐ 把低通后的真实速度共享给应用级采集器（MoveGate 第三路证据）；
+        //   门控生效时 realSpeed=null，第三路证据同步失效。
         tracker.liveSpeedKmh = speedFilter.realSpeed
         // ⭐ 会话极速的唯一写入口；悬浮窗靠 speedRevisionFlow 同步
         tracker.noteSpeed(shown)
@@ -1094,7 +1112,13 @@ class RealtimeFragment : Fragment(), LocationListener {
         }
     }
 
-    private fun shouldTrackGpsLoss(): Boolean = isRecording()
+    /**
+     * ⭐⭐ 静止（持续无电流证据）时不跟踪 GPS 丢失，也不启动推算器。
+     * 判据直接复用 Application 级单例 [SessionSpeedTracker.speedAllowedByCurrent]，
+     * 与 [renderSpeed] / 悬浮前台服务完全同源 —— 不再另写一份电流阈值。
+     */
+    private fun shouldTrackGpsLoss(): Boolean =
+        isRecording() && tracker.speedAllowedByCurrent
 
     /**
      * 是否处于「记录中」。

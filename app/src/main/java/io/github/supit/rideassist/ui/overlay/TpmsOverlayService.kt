@@ -102,9 +102,24 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
             return h >= 18 || h < 6
         }
 
-    /** 主题文字颜色：夜间白 / 白天黑（低电量/越界的红由渲染单独覆盖） */
+    /**
+     * ⭐ 主题文字颜色：**用户选色优先，0 = 自动**。
+     *
+     * 自动沿用按实际时间（18:00~06:00 夜间白 / 其余黑）的旧口径；
+     * 非 0 直接作为普通文字色。告警红仍由 [showRow] 单独覆盖，
+     * 不能让用户选色把异常态的红色吃掉。
+     */
     private val themeTextColor: Int
-        get() = if (themeIsNight) Color.WHITE else Color.BLACK
+        get() {
+            val custom = (application as? YybmsApp)?.prefs?.overlayTextColor ?: 0
+            return if (custom != 0) custom else if (themeIsNight) Color.WHITE else Color.BLACK
+        }
+
+    /** 「等待数据」用主文字色的 60% 透明度；自动模式下与原来的黑白半透明完全一致 */
+    private val waitingTextColor: Int
+        get() = Color.argb(
+            0x99, Color.red(themeTextColor), Color.green(themeTextColor), Color.blue(themeTextColor)
+        )
 
     /** 主题背景色（叠加 prefs 背景透明度） */
     private fun bgColor(): Int {
@@ -124,6 +139,10 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         /** 设置页拖动排序后通知悬浮窗重建行（服务运行时非空） */
         @Volatile
         var orderListener: (() -> Unit)? = null
+
+        /** ⭐ 设置页选完字体颜色后通知已运行的悬浮窗立刻换色（服务运行时非空） */
+        @Volatile
+        var textColorListener: ((Int) -> Unit)? = null
 
         /** ⭐ 空白占位项目 key（渲染时跳过数据填充） */
         const val KEY_SPACE = "space"
@@ -232,7 +251,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         tvWaiting = TextView(this).apply {
             text = "等待数据…"
             textSize = 13f
-            setTextColor(if (themeIsNight) 0x99FFFFFF.toInt() else 0x99000000.toInt())
+            setTextColor(waitingTextColor)
             gravity = Gravity.CENTER
             visibility = View.GONE
         }
@@ -282,6 +301,8 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         }
         // 设置页排序/开关变化时实时重建
         orderListener = { applyOrderAndVisibility() }
+        // ⭐ 设置页选色后立刻重刷全部行文字色 + 空态色（不重启服务）
+        textColorListener = { _ -> applyTheme() }
         // ⭐ 每分钟检查主题（跨 18:00/06:00 时段自动换色，服务长驻也能跟随）
         val tick = object : Runnable {
             override fun run() {
@@ -649,7 +670,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         val root = rootView ?: return
         (root.background as? GradientDrawable)?.setColor(bgColor())
         rowViews.values.forEach { it.setTextColor(themeTextColor) }
-        tvWaiting?.setTextColor(if (themeIsNight) 0x99FFFFFF.toInt() else 0x99000000.toInt())
+        tvWaiting?.setTextColor(waitingTextColor)
         renderAll()
     }
 
@@ -694,9 +715,14 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
     override fun onLocationChanged(location: Location) {
         // ⚠️ 无速度解算（隧道 / 树荫）不能当 0 喂进去，会污染低通序列
         if (!location.hasSpeed()) return
-        val shown = overlaySpeedFilter.push(location.speed * 3.6f)
         val app = application as? YybmsApp ?: return
         val tracker = app.sessionTracker
+        // ⭐⭐ 与实时页同一门控：电流持续为 0（静止）时 GPS 漂移压成 0，
+        //    否则会话极速会凭空记出「速度_Max 5 km/h」这种假值。
+        //    状态只在 tracker 里一份，这里只读。
+        val shown = overlaySpeedFilter.push(
+            location.speed * 3.6f, tracker.speedAllowedByCurrent
+        )
         // 退后台后实时页已停 GPS，MoveGate 的第三路证据由这里续上；
         // APP 在前台时让实时页独占写入，避免两路互相覆盖。
         if (!app.isSelfForeground) tracker.liveSpeedKmh = overlaySpeedFilter.realSpeed
@@ -727,6 +753,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         tempHidden = false
         bgAlphaListener = null
         orderListener = null
+        textColorListener = null
         handler.removeCallbacksAndMessages(null)
         tvWaiting = null
         tpmsPairRow = null

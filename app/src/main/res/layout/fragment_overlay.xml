@@ -144,6 +144,34 @@
                         android:layout_height="wrap_content" />
                 </LinearLayout>
 
+                <!-- ⭐ 悬浮字体颜色：单个按钮，点击选色，选完按钮本身染成所选颜色。
+                     位置固定在「悬浮项目」折叠头上方，不参与排序。 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/overlay_text_color_label"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_overlay_text_color"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="104dp"
+                        android:text="@string/overlay_text_color_auto"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
                 <!-- ⭐ 悬浮项目折叠头（点击展开/收起，默认收起） -->
                 <LinearLayout
                     android:id="@+id/header_items"

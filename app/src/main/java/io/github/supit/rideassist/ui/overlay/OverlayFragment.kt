@@ -1,5 +1,7 @@
 package io.github.supit.rideassist.ui.overlay
 
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -30,6 +32,10 @@ class OverlayFragment : Fragment() {
     private lateinit var quickAdapter: QuickNavAdapter
     private lateinit var quickTouchHelper: androidx.recyclerview.widget.ItemTouchHelper
 
+    /** ⭐ 颜色按钮的默认着色，选「自动」时原样还原（材质按钮的 tint 由主题决定） */
+    private var defaultBtnTint: ColorStateList? = null
+    private var defaultBtnTextColor: Int = 0
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -43,6 +49,14 @@ class OverlayFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         b.btnOverlayToggle.setOnClickListener { toggleOverlay() }
+
+        // ⭐ 悬浮字体颜色：一个按钮，点击弹颜色列表，选完按钮本身染成所选颜色。
+        //    ⚠️ 颜色名与 ARGB 在函数内同一个列表里构造，不用两份数组，不会错位。
+        defaultBtnTint = b.btnOverlayTextColor.backgroundTintList
+            ?: ColorStateList.valueOf(0xFF6750A4.toInt())
+        defaultBtnTextColor = b.btnOverlayTextColor.currentTextColor
+        renderTextColorButton(prefs.overlayTextColor)
+        b.btnOverlayTextColor.setOnClickListener { showTextColorPicker() }
 
         // ⭐ 打开导航软件：首次点击弹选择器（只设定不打开），之后直接打开；长按重选
         b.btnNavApp.setOnClickListener {
@@ -215,6 +229,62 @@ class OverlayFragment : Fragment() {
         b.btnOverlayToggle.text = getString(
             if (TpmsOverlayService.isRunning) R.string.overlay_stop else R.string.overlay_start
         )
+    }
+
+    /**
+     * ⭐ 悬浮字体颜色选项。**0 = 自动**（沿用悬浮服务按实际时间黑白切换）。
+     *
+     * 颜色名与 ARGB 放在同一个列表里，避免「名字数组」和「值数组」两份
+     * 各自维护、日后增删一项时错位（本项目「判据/常量只留一份」的老规矩）。
+     * ⚠️ 函数内构造而不是字段初始化 —— Fragment 字段求值在构造期，
+     *    那时还没有 Context，`getString()` 会直接抛 not attached。
+     */
+    private fun colorChoices(): List<Pair<String, Int>> = listOf(
+        getString(R.string.overlay_text_color_auto) to 0,
+        getString(R.string.overlay_text_color_white) to 0xFFFFFFFF.toInt(),
+        getString(R.string.overlay_text_color_black) to 0xFF000000.toInt(),
+        getString(R.string.overlay_text_color_red) to 0xFFFF3B30.toInt(),
+        getString(R.string.overlay_text_color_orange) to 0xFFFF9500.toInt(),
+        getString(R.string.overlay_text_color_yellow) to 0xFFFFD60A.toInt(),
+        getString(R.string.overlay_text_color_green) to 0xFF34C759.toInt(),
+        getString(R.string.overlay_text_color_cyan) to 0xFF00C7BE.toInt(),
+        getString(R.string.overlay_text_color_blue) to 0xFF0A84FF.toInt(),
+        getString(R.string.overlay_text_color_purple) to 0xFFAF52DE.toInt(),
+    )
+
+    /** 点击颜色按钮 → 选色 → 存偏好 → 染按钮 → 通知已运行的悬浮窗立刻换色 */
+    private fun showTextColorPicker() {
+        val ctx = requireContext()
+        val choices = colorChoices()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle(getString(R.string.overlay_text_color_title))
+            .setItems(choices.map { it.first }.toTypedArray()) { _, which ->
+                val color = choices[which].second
+                prefs.overlayTextColor = color
+                renderTextColorButton(color)
+                // ⭐ 不重启服务：listener 直达已运行的悬浮窗，
+                //    悬浮框位置 / 临时隐藏状态 / GPS 订阅都不会丢。
+                TpmsOverlayService.textColorListener?.invoke(color)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** 把按钮渲染成当前选中色；亮底黑字、暗底白字，保证颜色名始终可读 */
+    private fun renderTextColorButton(color: Int) {
+        val btn = b.btnOverlayTextColor
+        if (color == 0) {
+            btn.backgroundTintList = defaultBtnTint
+            btn.setTextColor(defaultBtnTextColor)
+            btn.text = getString(R.string.overlay_text_color_auto)
+            return
+        }
+        btn.backgroundTintList = ColorStateList.valueOf(color)
+        val lum = Color.red(color) * 0.299 +
+            Color.green(color) * 0.587 + Color.blue(color) * 0.114
+        btn.setTextColor(if (lum > 150) Color.BLACK else Color.WHITE)
+        btn.text = colorChoices().firstOrNull { it.second == color }?.first
+            ?: getString(R.string.overlay_text_color_auto)
     }
 
     /** 弹出应用选择器（排除本 APP 与系统应用），选中后记忆包名（只设定不打开） */

@@ -98,8 +98,12 @@ class YybmsApp : Application() {
         //    （它们依赖 GPS 显示的局部口径，搬走会改变统计语义）。
         appScope.launch {
             monitorRepository.realtime.collect { d ->
-                if (!d.hasDeviceData) return@collect   // 断连帧不采样（沿用旧口径）
                 val tracker = sessionTracker
+                // ⭐⭐ **电流证据的唯一喂数点**，必须放在 hasDeviceData 判断之前：
+                //    断连帧不刷新也不清零，交给宽限期自然过期 → 速度锁 0，
+                //    正是用户要求的「电流一直是 0，速度保持为 0」。
+                tracker.noteCurrentEvidence(abs(d.totalCurrent), d.hasDeviceData)
+                if (!d.hasDeviceData) return@collect   // 断连帧不采样（沿用旧口径）
                 // 判据只有 MoveGate 一处，速度证据取 tracker 里的最新 GPS 值
                 val verdict = MoveGate.evaluate(d, tracker.liveSpeedKmh)
                 tracker.updateRecordingState(verdict.moving, true)

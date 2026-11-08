@@ -161,6 +161,15 @@ class AppPrefs(context: Context) {
         get() = sp.getInt(KEY_OVERLAY_BG_ALPHA, 70)
         set(value) = sp.edit { putInt(KEY_OVERLAY_BG_ALPHA, value) }
 
+    /**
+     * ⭐ 悬浮字体颜色（ARGB）。
+     * **0 = 自动**：沿用按实际时间（18:00~06:00 夜白 / 其余黑）的旧口径。
+     * 非 0 = 用户选中的纯色，覆盖自动主题；告警红仍由渲染层单独覆盖。
+     */
+    var overlayTextColor: Int
+        get() = sp.getInt("overlay_text_color", 0)
+        set(value) = sp.edit { putInt("overlay_text_color", value) }
+
     /** 悬浮项目排序（逗号分隔的项目 key，按用户排列顺序） */
     var overlayOrder: String
         get() = sp.getString(KEY_OVERLAY_ORDER, "") ?: ""
