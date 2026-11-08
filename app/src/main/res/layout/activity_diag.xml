@@ -7,10 +7,12 @@
 
     <!-- ⭐ 标题居中（titleCentered）；关闭按钮放**右上角**菜单位（用户要求），
          不再用左侧 navigationIcon —— 左侧关闭是「返回」语义，右上角才是「关闭」语义 -->
+    <!-- ⚠️ 高度压到 52dp：MaterialToolbar 默认最小 64dp，
+         标题下方会空出一大块（用户 2026-11-09：「不要空那么多」） -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="52dp"
         app:titleCentered="true"
         app:title="@string/diag_title" />
 
@@ -22,7 +24,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="12dp">
 
             <!-- ============ 连接设置（自设置页迁入，放最上面，用户要求） ============ -->
             <com.google.android.material.card.MaterialCardView

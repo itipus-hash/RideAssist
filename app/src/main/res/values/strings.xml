@@ -314,7 +314,7 @@
     <string name="chart_speed">速度</string>
 
     <!-- 诊断面板 -->
-    <string name="diag_title">诊断面板</string>
+    <string name="diag_title">信息面板</string>
     <string name="diag_close">关闭</string>
     <!-- 胎压监测 -->
     <string name="tpms_title">胎压数据</string>
