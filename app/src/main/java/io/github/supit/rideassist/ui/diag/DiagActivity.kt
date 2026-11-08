@@ -482,11 +482,12 @@ header?.let { addRow(it, isHeader = true) }
         b.tvDevice.text = buildString {
             // ⭐ 动态量用文本（fillTable 的动态行渲染不出来，原因未明，先用已验证有效的方式）
             appendLine("总压　%.2f V　电流 %.2f A　功率 %.0f W".format(d.totalVoltage, d.totalCurrent, d.power))
-            appendLine("SOC　${d.soc.toInt()} %　剩余 %.2f / %.2f Ah　循环 %d 次".format(d.remainingCapacity, d.ratedCapacity, d.cycleCount))
+            // ⚠️ 字面百分号必须写 %%，否则 String.format 把它后面的字符当转换符
+            appendLine("SOC　%d %%　剩余 %.2f / %.2f Ah　循环 %d 次".format(d.soc.toInt(), d.remainingCapacity, d.ratedCapacity, d.cycleCount))
             appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
             if (tempText.isNotBlank()) appendLine("温度　" + tempText)
             if (!live && savedAtMs > 0L) {
-                append("（保护板已断开，以上为 ${clockOf(savedAtMs)} 最后一次读到的数据）")
+                append("（${formatStamp(savedAtMs)} 缓存数据。）")
             }
         }
     }
@@ -503,17 +504,22 @@ header?.let { addRow(it, isHeader = true) }
         )
     }
 
-    /** 本地缓存阈值的保存时刻，形如「（11-08 20:31 保存）」 */
-    private fun savedAtText(ms: Long): String {
-        if (ms <= 0L) return "（时间未知）"
+    /** 时刻 → MM-dd HH:mm（缓存标注共用） */
+    private fun formatStamp(ms: Long): String {
         val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
         return String.format(
-            Locale.US, "（%02d-%02d %02d:%02d 保存）",
+            Locale.US, "%02d-%02d %02d:%02d",
             cal.get(java.util.Calendar.MONTH) + 1,
             cal.get(java.util.Calendar.DAY_OF_MONTH),
             cal.get(java.util.Calendar.HOUR_OF_DAY),
             cal.get(java.util.Calendar.MINUTE)
         )
+    }
+
+    /** 本地缓存阈值的保存时刻，形如「（11-08 20:31 保存）」 */
+    private fun savedAtText(ms: Long): String {
+        if (ms <= 0L) return "（时间未知）"
+        return "（${formatStamp(ms)} 保存）"
     }
 
     private fun fmtMs(ms: Long): String {
