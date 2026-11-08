@@ -37,16 +37,6 @@ class MonitorRepository(
     companion object {
         private const val TAG = "MonitorRepository"
 
-        /**
-         * 保护参数（0xA0）的校准周期：每 N 轮轮询读一次。
-         *
-         * 用户明确要求「不要反复读取」。旧实现把它混在每秒的
-         * `YybmsCommand.entries.forEach` 里，等于每秒读一次 167 字节的静态配置帧。
-         * 现在：连接后第一轮读一次（拿最新值），之后 300 轮（≈5 分钟）校准一次；
-         * 只有值真的变了才覆盖本地缓存。
-         */
-        const val PROTECT_PARAM_EVERY_ROUNDS = 300
-
         /** 需求：1 秒刷新一次 */
         const val POLL_INTERVAL_MS = 1_000L
 
@@ -93,9 +83,10 @@ class MonitorRepository(
                 // ⭐⭐ **0xA0 帧解析成功 → 与本地缓存比较，有变化才写盘**。
                 //    用户要求「读到有变化就覆盖阈值，但不要反复读取」，
                 //    所以这里只做"存"，不做"定时刷"。
-                if (parsed.hasProtectParams &&
-                    YybmsCommand.fromResponseLength(frame.size) == YybmsCommand.READ_PROTECT_PARAM
-                ) {
+                // ⚠️ 判据只看「本帧真的解析出了阈值」，**不再依赖帧长识别** ——
+                //    帧长反查一旦对不上就会静默漏存（这类"永远不写盘"的 bug 极难发现）。
+                //    `protectParamsFromCache` 为 false 保证阈值来自本次解析而非缓存注入。
+                if (parsed.hasProtectParams && !parsed.protectParamsFromCache) {
                     val fresh = ProtectThresholds.of(parsed, System.currentTimeMillis())
                     if (ProtectParamsStore.saveIfChanged(cache, fresh)) {
                         Log.i(TAG, "保护参数已更新到本地缓存")
@@ -188,12 +179,19 @@ class MonitorRepository(
     private fun startPolling() {
         if (pollJob?.isActive == true) return
         pollJob = scope.launch {
-            var round = 0
+            var lastProtectReadMs = 0L
             while (isActive) {
-                // ⭐ 保护参数（0xA0）：**不再每秒读**。
-                //    连接后第一轮读一次拿最新值，之后每 PROTECT_PARAM_EVERY_ROUNDS
-                //    轮校准一次（≈5 分钟）；读到有变化才覆盖本地缓存。
-                if (round % PROTECT_PARAM_EVERY_ROUNDS == 0) {
+                // ⭐⭐ 保护参数（0xA0）**自适应读取**：
+                // - 本次会话还没读到阈值 → 每轮都读（首条请求丢包 / 设备刚开机
+                //   未就绪时能自己重试，旧实现每秒读一次就是这个效果）
+                // - 已经读到 → 降到每 5 分钟校准一次（用户要求「不要反复读取」）
+                // ⚠️ 判据必须用 `protectParamsFromCache == false`：只看
+                //   `hasProtectParams` 会被本地缓存污染，误以为"读到了"而不再读。
+                val d = _realtime.value
+                val readThisSession = d.hasProtectParams && !d.protectParamsFromCache
+                val nowMs = System.currentTimeMillis()
+                if (ProtectPollPolicy.shouldRead(readThisSession, nowMs - lastProtectReadMs)) {
+                    lastProtectReadMs = nowMs
                     bleManager.sendReadCommand(YybmsCommand.READ_PROTECT_PARAM)
                     delay(FRAME_GAP_MS)
                 }
@@ -210,7 +208,6 @@ class MonitorRepository(
                         delay(FRAME_GAP_MS)
                     }
 
-                round++
                 delay(POLL_INTERVAL_MS)
             }
         }

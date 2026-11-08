@@ -130,8 +130,9 @@ object MoveGate {
      * 本项目有过「拍脑袋阈值忘了标定」导致后续误判的隐患，
      * 凡是未经实机标定的估计值，这里一律显式写「未标定」。
      */
+    // ⚠️ 不再列「累计里程 distanceKm」：诊断面板的累加器区已经把它删掉了，
+    //    这里留着会对一个不显示的数值解释判据（用户 2026-11-08 要求删）。
     fun gateTable(): List<Row> = listOf(
-        Row("累计里程 distanceKm", "moving", "%.1f km", "协议"),
         Row("累计耗能 energyWh", "moving", "%.2f Wh", "协议"),
         Row("回收电量 regenWh", "moving", "%.2f Wh", "协议"),
         Row("骑行时长 rideMovingMs", "moving", "时长", "协议"),

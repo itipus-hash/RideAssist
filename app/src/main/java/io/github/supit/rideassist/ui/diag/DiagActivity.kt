@@ -126,7 +126,6 @@ class DiagActivity : AppCompatActivity() {
                 repo.realtime.collect { d ->
                     renderDevice(d)
                     renderAlarms(d)
-                    renderProbeStats(d)
                 }
             }
         }
@@ -150,7 +149,6 @@ class DiagActivity : AppCompatActivity() {
             // ⭐ 速度门控的原始状态：排查「松油门归零 / 静止漂移」时先看这两行
             appendLine("运动锁存：${if (s.motionLatched) "● 已锁存（滑行不断速）" else "○ 未锁存（静止）"}")
             appendLine("速度门控：${if (s.speedAllowed) "● 允许 GPS 速度" else "○ 锁 0"}")
-            appendLine("累计里程　　${fmt(s.distanceKm, 3)} km")
             appendLine("放电耗能　　${fmt(s.energyWh, 2)} Wh")
             appendLine("回收电量　　${fmt(s.regenWh, 2)} Wh")
             appendLine("净耗能　　　${fmt(s.netEnergyWh, 2)} Wh")
@@ -275,29 +273,6 @@ class DiagActivity : AppCompatActivity() {
         b.llAnchors.removeAllViews()
         b.llAnchors.addView(sectionTitle("保护参数"))
         fillTable(b.llAnchors, header = null, rows = d.protocolAnchors(), numericFrom = 1)
-    }
-
-    /** ⭐ 温度探头独立性验证区块（T1/T2 是否两路独立探头） */
-    private fun renderProbeStats(d: BmsRealtimeData) {
-        val st = io.github.supit.rideassist.core.protocol.TempProbeStats
-        val verdict = when {
-            st.divergedFrames > 0 -> "两路独立（已出现分化 ${st.divergedFrames} 帧）"
-            st.totalFrames > 50 -> "未见分化——疑似同源填充，仅一路探头"
-            else -> "样本不足，继续观察（${st.totalFrames} 帧）"
-        }
-        b.llAnchors.addView(sectionTitle("温度探头独立性"))
-        fillTable(
-            container = b.llAnchors,
-            header = null,
-            rows = listOf(
-                listOf("T1 原始字节", if (d.tempRawT1 != null) "0x%02X".format(d.tempRawT1) else "--"),
-                listOf("T2 原始字节", if (d.tempRawT2 != null) "0x%02X".format(d.tempRawT2) else "--"),
-                listOf("累计帧数", "${st.totalFrames}"),
-                listOf("T1≠T2 帧数", "${st.divergedFrames}"),
-                listOf("结论", verdict),
-            ),
-            numericFrom = 1,
-        )
     }
 
     /** 区块标题（卡片内的小标题），与隐形表格同字体风格 */
