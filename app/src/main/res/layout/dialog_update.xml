@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ⭐ 更新弹窗自定义布局：三个按钮竖排全宽（系统三按钮挤一行太丑，用户要求） -->
+<!-- ⭐ 更新弹窗自定义布局：按钮竖排全宽（系统三按钮挤一行太丑，用户要求） -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -48,4 +48,13 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:text="跳过此版本，不再提醒" />
+
+    <!-- ⭐ 最下面：复制下载页面链接并顺手用浏览器打开（APP 内下载失败时的备用通道） -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_copy_page"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="@string/update_copy_page" />
 </LinearLayout>

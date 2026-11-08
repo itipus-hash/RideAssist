@@ -230,6 +230,36 @@ class MonitorFragment : Fragment() {
                         dlg.dismiss()
                         io.github.supit.rideassist.core.update.UpdateChecker.markSkipped(prefs, info.version)
                     }
+                    // ⭐ 弹窗最下面：把下载页面链接复制进剪贴板，并顺手用浏览器打开。
+                    //    APP 内 DownloadManager 失败 / 用户想在电脑上下载时走这条路。
+                    //    打开失败也保留弹窗，用户还能回去点「立即更新」。
+                    v2.findViewById<com.google.android.material.button.MaterialButton>(
+                        io.github.supit.rideassist.R.id.btn_copy_page).setOnClickListener {
+                        val url = info.downloadPageUrl()
+                        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        cm.setPrimaryClip(
+                            android.content.ClipData.newPlainText("RideAssist 下载页面", url)
+                        )
+                        val opened = try {
+                            ctx.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url)
+                                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                            true
+                        } catch (_: Exception) { false }
+                        android.widget.Toast.makeText(
+                            ctx,
+                            ctx.getString(
+                                if (opened) io.github.supit.rideassist.R.string.update_page_copied
+                                else io.github.supit.rideassist.R.string.update_page_open_failed
+                            ),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        if (opened) dlg.dismiss()
+                    }
                     dlg.show()
                 }
             }

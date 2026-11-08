@@ -1,5 +1,6 @@
 package io.github.supit.rideassist.core.update
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,5 +31,21 @@ class UpdateCheckerTest {
     @Test fun `缺位与非法段按 0 处理且不抛异常`() {
         assertTrue(UpdateChecker.compareVersions("1.0.5", "1.0") > 0)
         assertTrue(UpdateChecker.compareVersions("1.0.x", "1.0.0") == 0)
+    }
+
+    @Test fun `下载页面是 GitHub 文件页且不是直链`() {
+        val info = UpdateChecker.UpdateInfo("1.0.6", "n", "RideAssist-v1.0.6-debug.apk")
+        assertEquals(
+            "https://github.com/itipus-hash/RideAssist/blob/master/apk/" +
+                "RideAssist-v1.0.6-debug.apk",
+            info.downloadPageUrl()
+        )
+        // 复制的是「页面」，不是 raw 文件直链（直链由 downloadUrls() 单独给下载器用）
+        assertTrue(!info.downloadPageUrl().startsWith("https://raw.githubusercontent.com/"))
+    }
+
+    @Test fun `下载页面随 APK 文件名变化 不硬编码版本`() {
+        val info = UpdateChecker.UpdateInfo("1.0.7", "n", "RideAssist-v1.0.7-debug.apk")
+        assertTrue(info.downloadPageUrl().endsWith("/apk/RideAssist-v1.0.7-debug.apk"))
     }
 }

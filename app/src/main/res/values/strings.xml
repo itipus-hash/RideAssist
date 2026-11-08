@@ -333,6 +333,10 @@
     <!-- ⭐ 数据不在今天时按自然日显示，避免「更新于 21:56:31」看不出是哪天 -->
     <string name="tpms_update_yesterday">更新于 昨天</string>
     <string name="tpms_update_days_ago">更新于 %1$d 天前</string>
+    <!-- ⭐ 更新弹窗：下载页面备用通道 -->
+    <string name="update_copy_page">复制并打开下载页面</string>
+    <string name="update_page_copied">下载页面链接已复制</string>
+    <string name="update_page_open_failed">无法打开浏览器，链接已复制</string>
     <string name="tpms_rel_yesterday">昨天</string>
     <string name="tpms_rel_days_ago">%1$d 天前</string>
     <string name="tpms_binding_fmt">绑定中… %1$d 秒</string>

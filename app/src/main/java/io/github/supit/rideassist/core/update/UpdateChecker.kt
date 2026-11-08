@@ -36,6 +36,15 @@ object UpdateChecker {
             "https://raw.githubusercontent.com/$OWNER/$REPO/$BRANCH/apk/$apkFile",
             "https://ghfast.top/https://raw.githubusercontent.com/$OWNER/$REPO/$BRANCH/apk/$apkFile",
         )
+
+        /**
+         * ⭐ **下载页面**（不是直链）：GitHub 上这个 APK 的文件页，能看版本、
+         * 能点 Download。更新弹窗最下面的「复制并打开下载页面」用这个地址——
+         * APP 内 DownloadManager 下载失败时，用户可把链接粘到浏览器 / 电脑 /
+         * 下载器里自己下。地址只在这里构造一份，别在 UI 层拼字符串。
+         */
+        fun downloadPageUrl(): String =
+            "https://github.com/$OWNER/$REPO/blob/$BRANCH/apk/$apkFile"
     }
 
     /** 当前版本是否落后于远端 */
