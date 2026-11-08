@@ -53,7 +53,7 @@ enum class AlarmFlag(val bit: Int, val label: String) {
     UNDER_TEMP_CHARGE(10, "充电低温"),
     OVER_TEMP_DISCHARGE(11, "放电过温"),
     UNDER_TEMP_DISCHARGE(12, "放电低温"),
-    OVER_TEMP_MOS(13, "MOS 过温"),
+    OVER_TEMP_MOS(13, "MOS过温"),
     SOC_ABNORMAL(14, "SOC 异常"),
 
     // ---- 采样/执行器失效（bit25~31）----
@@ -685,11 +685,12 @@ data class BmsRealtimeData(
         row("放电过流", ma(totalCurrent), la(overCurrentDischarge))
         row("充电过流", ma(totalCurrent), la(overCurrentCharge))
         row("短路", ma(totalCurrent), la(shortCircuitCurrent))
+        // ⭐ MOS过温挪到电池过温上面，标签去掉中间空格（用户 2026-11-09）
+        row("MOS过温", mt(mosTemp), lt(mosOverTemp))
         row(
             "电池过温", mt(maxMeasuredTemp()),
             lt(if (totalCurrent < 0f) overTempCharge else overTempDischarge)
         )
-        row("MOS 过温", mt(mosTemp), lt(mosOverTemp))
         row(
             "电池低温", mt(minMeasuredTemp()),
             lt(if (totalCurrent < 0f) underTempCharge else underTempDischarge)
