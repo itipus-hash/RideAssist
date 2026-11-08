@@ -62,6 +62,16 @@ class DiagActivity : AppCompatActivity() {
 
     private val repo by lazy { YybmsAppHolder.from(this).monitorRepository }
 
+    /**
+     * ⭐ **最后一次有效数据**：断开保护板后电池信息不能变空
+     * （用户 2026-11-08 要求「保持最后一次读取数据」）。
+     *
+     * 只影响「电池实况」这一块的展示，不动 `_realtime` ——
+     * 否则里程/耗能会继续用旧数据积分。
+     */
+    private var lastGood: BmsRealtimeData? = null
+    private var lastGoodAtMs = 0L
+
     private val ui = Handler(Looper.getMainLooper())
 
     /** 逐秒刷新；只刷新文本，不做任何采样 */
@@ -94,7 +104,6 @@ class DiagActivity : AppCompatActivity() {
         }
 
         // ⭐ 门控对照表是**静态**的，只渲染一次
-        b.tvGateTable.text = renderGateTable()
 
         setupDiagPrefs()
 
@@ -124,7 +133,13 @@ class DiagActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 repo.realtime.collect { d ->
-                    renderDevice(d)
+                    if (d.hasDeviceData) {
+                        lastGood = d
+                        lastGoodAtMs = System.currentTimeMillis()
+                    }
+                    // 断开时用最后一次数据顶上，并标注是"已断开的旧数据"
+                    val shown = if (d.hasDeviceData) d else lastGood ?: d
+                    renderDevice(shown, live = d.hasDeviceData)
                     renderAlarms(d)
                 }
             }
@@ -149,9 +164,6 @@ class DiagActivity : AppCompatActivity() {
             // ⭐ 速度门控的原始状态：排查「松油门归零 / 静止漂移」时先看这两行
             appendLine("运动锁存：${if (s.motionLatched) "● 已锁存（滑行不断速）" else "○ 未锁存（静止）"}")
             appendLine("速度门控：${if (s.speedAllowed) "● 允许 GPS 速度" else "○ 锁 0"}")
-            appendLine("放电耗能　　${fmt(s.energyWh, 2)} Wh")
-            appendLine("回收电量　　${fmt(s.regenWh, 2)} Wh")
-            appendLine("净耗能　　　${fmt(s.netEnergyWh, 2)} Wh")
             appendLine("骑行时长　　${fmtMs(s.rideMovingMs)}")
             appendLine("行程用时　　${fmtMs(s.tripElapsedMs)}")
             appendLine("采样点　　　速${s.speedPoints} 功${s.powerPoints} 流${s.currentPoints} 压${s.diffPoints}")
@@ -262,17 +274,25 @@ class DiagActivity : AppCompatActivity() {
         // 版本、SN、电池类型、串数、额定容量、标称总压
         val profile = io.github.supit.rideassist.data.prefs.DeviceProfileStore
             .load(YybmsAppHolder.from(this).deviceCache)
+        // ⚠️ numericFrom 传 1（不是 MAX_VALUE）：否则所有列都按 weight 平分，
+        //    右侧值列被压窄，长型号 `YY-BCU12-MOS-20S150A-MUX` 会折成两行
+        //    （用户反馈「右侧单元格大一点，不然会分行」）。
+        //    传 1 后第二列用 measureText 量出的固定宽度 + 单行不折行。
         fillTable(
             b.llIdentity, header = null,
             rows = if (d.hasDeviceData) d.deviceIdentity()
             else profile?.identityRows() ?: emptyList(),
-            numericFrom = Int.MAX_VALUE,
+            numericFrom = 1,
         )
 
-        // 保护参数：区块标题 + 隐形表格
+        // 均衡参数：只有真的有值才建区块，否则整块不显示
+        // （空表留一个标题比不显示更难看，用户也分不清是"没数据"还是"坏了"）
         b.llAnchors.removeAllViews()
-        b.llAnchors.addView(sectionTitle("保护参数"))
-        fillTable(b.llAnchors, header = null, rows = d.protocolAnchors(), numericFrom = 1)
+        val anchors = d.protocolAnchors()
+        if (anchors.isNotEmpty()) {
+            b.llAnchors.addView(sectionTitle("均衡参数"))
+            fillTable(b.llAnchors, header = null, rows = anchors, numericFrom = 1)
+        }
     }
 
     /** 区块标题（卡片内的小标题），与隐形表格同字体风格 */
@@ -418,7 +438,7 @@ header?.let { addRow(it, isHeader = true) }
         }
     }
 
-    private fun renderDevice(d: BmsRealtimeData) {
+    private fun renderDevice(d: BmsRealtimeData, live: Boolean) {
         b.tvDevice.text = buildString {
             appendLine("电池　${d.batteryTypeName} / ${d.cellCount} 串" +
                 if (d.maxCellNumSupported > 0) "（最大支持 ${d.maxCellNumSupported} 串）" else "")
@@ -438,6 +458,11 @@ header?.let { addRow(it, isHeader = true) }
             )
             appendLine("温度　${if (temps.isEmpty()) "无探头" else temps.joinToString("  ")}")
             appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
+            if (!live && lastGood != null) {
+                append("\n（保护板已断开，以上为 ")
+                append(clockOf(lastGoodAtMs))
+                append(" 最后一次读到的数据）")
+            }
         }
         // 有数据时把门控区的实时值填上
         val verdict = MoveGate.evaluate(d, null)
@@ -454,14 +479,17 @@ header?.let { addRow(it, isHeader = true) }
         }
     }
 
-    private fun renderGateTable(): String = buildString {
-        MoveGate.gateTable().forEach { r ->
-            appendLine("${r.item}  ←  ${r.gate}  ${r.fmt}")
-            appendLine("　　阈值来源：${r.source}")
-        }
-    }
-
     private fun fmt(v: Double, d: Int): String = String.format(Locale.US, "%.${d}f", v)
+
+    /** 墙钟毫秒 → HH:mm */
+    private fun clockOf(ms: Long): String {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+        return String.format(
+            Locale.US, "%02d:%02d",
+            cal.get(java.util.Calendar.HOUR_OF_DAY),
+            cal.get(java.util.Calendar.MINUTE)
+        )
+    }
 
     /** 本地缓存阈值的保存时刻，形如「（11-08 20:31 保存）」 */
     private fun savedAtText(ms: Long): String {

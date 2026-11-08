@@ -707,27 +707,14 @@ data class BmsRealtimeData(
      * 优先看它们；全对不上就别急着调 UI，先回去核对官方代码。
      */
 fun protocolAnchors(): List<List<String>> {
+        // ⚠️ 只保留「告警项表格里没有的」参数。
+        // 原来这里还列了单体/总压/电流/温度的阈值 —— 那些在告警表的阈值列
+        // 已经有了，同一个数字出现两遍纯属噪音（用户 2026-11-08 指出重复）。
         val rows = mutableListOf<Pair<String, String>>()
-  fun row(label: String, value: String) { rows.add(label to value) }
-        if (balanceCutoffVolt > 0f) row("均衡截止电压", "%.3fV".format(balanceCutoffVolt))
-     if (balanceDiffThreshold > 0f) row("均衡压差阈值", "%.1fmV".format(balanceDiffThreshold))
-      if (overVoltSet > 0f) row("单体过压阈值", "%.0fmV".format(overVoltSet * 1000f))
-        if (underVoltSet > 0f) row("单体欠压阈值", "%.0fmV".format(underVoltSet * 1000f))
-  if (overVoltRecover > 0f) row("单体过压恢复", "%.0fmV".format(overVoltRecover * 1000f))
-        if (underVoltRecover > 0f) row("单体欠压恢复", "%.0fmV".format(underVoltRecover * 1000f))
-     if (packOverVoltSet > 0f) row("总压过压阈值", "%.2fV".format(packOverVoltSet))
-        if (packOverVoltRecover > 0f) row("总压过压恢复", "%.2fV".format(packOverVoltRecover))
-     if (packUnderVoltSet > 0f) row("总压欠压阈值", "%.2fV".format(packUnderVoltSet))
-        if (overCurrentCharge > 0f) row("充电过流阈值", "%.1fA".format(overCurrentCharge))
- if (overCurrentDischarge > 0f) row("放电过流阈值", "%.1fA".format(overCurrentDischarge))
-        if (overCurrentDischarge2 > 0f) row("放电过流二级", "%.1fA".format(overCurrentDischarge2))
-        if (shortCircuitCurrent > 0f) row("短路电流", "%.0fA".format(shortCircuitCurrent))
-        if (overTempCharge > 0f) row("充电过温阈值", "%.0f℃".format(overTempCharge))
-        if (underTempCharge > 0f) row("充电低温阈值", "%.0f℃".format(underTempCharge))
-  if (overTempDischarge > 0f) row("放电过温阈值", "%.0f℃".format(overTempDischarge))
-      if (underTempDischarge > 0f) row("放电低温阈值", "%.0f℃".format(underTempDischarge))
-      if (mosOverTemp > 0f) row("MOS 过温阈值", "%.0f℃".format(mosOverTemp))
-// ⚠️ 只返回原始两列数据，对齐交给 UI 层隐形表格（见 DiagActivity.fillTable）
+        if (balanceCutoffVolt > 0f) rows.add("均衡截止电压" to "%.3fV".format(balanceCutoffVolt))
+        if (balanceDiffThreshold > 0f) {
+            rows.add("均衡压差阈值" to "%.1fmV".format(balanceDiffThreshold))
+        }
         return rows.map { listOf(it.first, it.second) }
     }
 

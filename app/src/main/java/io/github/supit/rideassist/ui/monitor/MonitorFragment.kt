@@ -66,6 +66,12 @@ class MonitorFragment : Fragment() {
     /** 刚结束扫描（用于决定是否显示空态提示） */
     private var scanningJustFinished = false
 
+    /** 上一次连接状态是否为「已连接」—— 用来识别「刚断开」这一次迁移 */
+    private var wasConnected = false
+
+    /** 断开提示的节流（重连循环时不要连续弹） */
+    private var lastDisconnectedToastMs = 0L
+
     // ==================== 当前时间（HH:MM） ====================
 
     /**
@@ -1151,6 +1157,21 @@ class MonitorFragment : Fragment() {
     }
 
     private fun renderConnectionState(state: ConnectionState) {
+        // ⭐ 从「已连接」掉到「已断开」时主动提示一次（用户要求
+        //   「断开保护板悬浮提示一下：保护板连接已断开」）。
+        //   加 3 秒节流：连接不稳定时会在 CONNECTED / DISCONNECTED 间反复跳，
+        //   不节流会连弹一串 Toast。
+        if (wasConnected && state == ConnectionState.DISCONNECTED) {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastDisconnectedToastMs > 3_000L) {
+                lastDisconnectedToastMs = now
+                Toast.makeText(
+                    requireContext(), "保护板连接已断开", Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        wasConnected = state == ConnectionState.CONNECTED
+
         binding.tvConnectionState.text = state.displayText
         binding.tvConnectionState.setTextColor(
             ContextCompat.getColor(

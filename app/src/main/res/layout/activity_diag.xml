@@ -110,7 +110,7 @@
 
      <TextView
    style="@style/DiagText"
-android:text="设备信息" />
+android:text="保护板信息" />
 
             <LinearLayout
       android:id="@+id/ll_identity"
@@ -145,15 +145,6 @@ android:text="设备信息" />
                 <TextView
                     style="@style/DiagText"
                     android:id="@+id/tv_move_gate" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- 门控对照表（静态） -->
-            <com.google.android.material.card.MaterialCardView
-                style="@style/DiagCard">
-
-                <TextView
-                    style="@style/DiagText"
-                    android:id="@+id/tv_gate_table" />
             </com.google.android.material.card.MaterialCardView>
 
             <!-- ④ 派生指标 -->

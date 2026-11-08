@@ -123,24 +123,7 @@ object MoveGate {
         return Verdict(false, null, amps, power, speed)
     }
 
-    /**
-     * 门控对照表 —— 直接渲染到诊断面板。
-     *
-     * ⭐ 目的不是好看，而是**把「阈值从哪来」钉在代码里**。
-     * 本项目有过「拍脑袋阈值忘了标定」导致后续误判的隐患，
-     * 凡是未经实机标定的估计值，这里一律显式写「未标定」。
-     */
-    // ⚠️ 不再列「累计里程 distanceKm」：诊断面板的累加器区已经把它删掉了，
-    //    这里留着会对一个不显示的数值解释判据（用户 2026-11-08 要求删）。
-    fun gateTable(): List<Row> = listOf(
-        Row("累计耗能 energyWh", "moving", "%.2f Wh", "协议"),
-        Row("回收电量 regenWh", "moving", "%.2f Wh", "协议"),
-        Row("骑行时长 rideMovingMs", "moving", "时长", "协议"),
-        Row("平均速度 avgSpeed", "moving", "%.1f km/h", "协议"),
-        Row("证据1 电流", "abs(I) ≥ %.1fA".format(TH_CURRENT_A), "", "协议口径"),
-        Row("证据2 功率", "P ≥ %.0fW".format(TH_POWER_W), "", "⚠ 量纲估算·未标定"),
-        Row("证据3 速度", "v ≥ %.0fkm/h".format(TH_SPEED_KMH), "", "⚠ 量纲估算·与显示同源"),
-    )
-
-    data class Row(val item: String, val gate: String, val fmt: String, val source: String)
+    // ⚠️ 「门控对照表」（gateTable / Row）已删除：诊断面板上那整块静态说明
+    //    与「三路证据」重复，用户 2026-11-08 要求整块去掉。
+    //    「未标定阈值要显式标注」这条方法论仍在 DEBUG_GUIDE / 记忆里保留。
 }
