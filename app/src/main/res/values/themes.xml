@@ -170,7 +170,7 @@
     <style name="DiagCard">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginTop">12dp</item>
+        <item name="android:layout_marginTop">8dp</item>
         <!-- ⚠️⭐ MaterialCardView **会忽略 android:padding**，
              必须用 contentPadding —— 之前写的 android:padding 从未生效，
              所有卡片内容都贴着边框，这就是「字体挨着边缘」的根因。

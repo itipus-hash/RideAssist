@@ -445,12 +445,15 @@ header?.let { addRow(it, isHeader = true) }
             appendLine("SOC　${d.soc.toInt()} %　剩余 ${fmt(d.remainingCapacity.toDouble(), 2)} Ah" +
                 " / ${fmt(d.ratedCapacity.toDouble(), 2)} Ah")
             appendLine("循环　${d.cycleCount} 次")
-            val temps = listOfNotNull(
-                d.mosTemp?.let { "MOS %.1f℃".format(it) },
-                d.temp1?.let { "T1 %.1f℃".format(it) },
-                d.temp2?.let { "T2 %.1f℃".format(it) },
-                d.temp3?.let { "T4 %.1f℃".format(it) },
-            )
+            // ⭐ 与首页温度槽位**同一规则**（MonitorFragment）：探头路数决定显示几个，
+            //    T3/T4 在 2 路机型上是别的数据，按「有没有读数」显示会冒出垃圾值
+            val probeCount = d.tempProbeCount
+            val temps = buildList {
+                d.mosTemp?.let { add("MOS %.1f℃".format(it)) }
+                if (probeCount >= 1) d.temp1?.let { add("T1 %.1f℃".format(it)) }
+                if (probeCount >= 2) d.temp2?.let { add("T2 %.1f℃".format(it)) }
+                if (probeCount >= 3) d.temp3?.let { add("T4 %.1f℃".format(it)) }
+            }
             appendLine("温度　${if (temps.isEmpty()) "无探头" else temps.joinToString("  ")}")
             appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
             if (!live && savedAtMs > 0L) {
