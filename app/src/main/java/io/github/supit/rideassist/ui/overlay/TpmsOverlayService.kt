@@ -283,6 +283,12 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
                 p.gravity = Gravity.TOP or Gravity.START
                 p.x = resources.displayMetrics.widthPixels - root.width - p.x
                 windowManager?.updateViewLayout(root, p)
+                // ⭐⭐ 换算结果一并持久化：否则 overlayX/Y 一直是 -1，
+                //    以后任何一次服务重建都会重走「默认右上 + 按当前宽度换算」，
+                //    内容宽度一变（排序 / 字号 / 开关）窗口就会漂移。
+                //    写死后运行期坐标恒为 START 基准，与用户手动拖动保存的口径一致。
+                prefs.overlayX = p.x
+                prefs.overlayY = p.y
             }
         }
         layoutParams = params
@@ -351,6 +357,9 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
      * - ⭐ **唯一例外**：前 / 后轮胎压合并到同一水平行。两个开关与排序位置仍
      *   各自独立，只是渲染时落到同一个 [tpmsPairRow] 里，谁在左由排序决定。
      *   间隔用真实 margin 而不是补空格字符 —— 字体宽度不可靠（本项目踩过）。
+     * - ⭐⭐ **只重建 root 的子 View，绝不碰 [layoutParams] / 服务生命周期**。
+     *   设置页拖动排序会连续回调本方法；一旦顺手重启服务，就会重新
+     *   `addView` 把悬浮框位置打回默认点（用户实测的「排序重置窗口位置」）。
      */
     private fun applyOrderAndVisibility() {
         val root = rootView ?: return

@@ -107,10 +107,9 @@ class OverlayFragment : Fragment() {
         quickAdapter.reload()
         b.btnAddQuickNav.setOnClickListener { editQuickNav(-1) }
 
-        adapter = OverlayItemsAdapter(
-            prefs,
-            onUiChanged = { restartIfRunning() },
-        )
+        // ⭐⭐ 悬浮项目排序/开关/字号变化一律走服务内的 orderListener 重建行，
+        //    **不再 stop/start 服务**（重启会重新 addView，把悬浮框位置打回默认点）。
+        adapter = OverlayItemsAdapter(prefs)
         // ⭐ 悬浮项目开关改成「一行一个」（原来 2 列挤一行），仍由
         //    ItemTouchHelper 长按拖动排序，顺序保存口径不变。
         b.recyclerOverlayItems.layoutManager = LinearLayoutManager(requireContext())
@@ -216,13 +215,6 @@ class OverlayFragment : Fragment() {
             ctx.startService(android.content.Intent(ctx, TpmsOverlayService::class.java))
         }
         b.btnOverlayToggle.postDelayed({ if (_binding != null) refreshToggleText() }, 400)
-    }
-
-    private fun restartIfRunning() {
-        if (!TpmsOverlayService.isRunning) return
-        val ctx = requireContext()
-        ctx.stopService(android.content.Intent(ctx, TpmsOverlayService::class.java))
-        ctx.startService(android.content.Intent(ctx, TpmsOverlayService::class.java))
     }
 
     private fun refreshToggleText() {

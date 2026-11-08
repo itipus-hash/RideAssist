@@ -16,7 +16,6 @@ import io.github.supit.rideassist.ui.overlay.OverlayItems.saveOrder
  */
 class OverlayItemsAdapter(
     private val prefs: AppPrefs,
-    private val onUiChanged: () -> Unit,
 ) : RecyclerView.Adapter<OverlayItemsAdapter.VH>() {
 
     val defs = OverlayItems.ordered(prefs).toMutableList()
@@ -61,15 +60,22 @@ class OverlayItemsAdapter(
         }
     }
 
-    /** ItemTouchHelper 拖动回调：交换并持久化顺序 */
+    /**
+     * ItemTouchHelper 拖动回调：交换并持久化顺序。
+     *
+     * ⭐⭐ **只通知已运行的悬浮窗重建行，绝不重启服务**：
+     * 以前这里还调 `onUiChanged -> restartIfRunning()`（stop/start 一遍），
+     * 服务重建会重新 `addView`，用户没拖过悬浮框时 `overlayX/Y` 还是 -1，
+     * 窗口就跳回默认右上 —— 表现为「一拖动排序，悬浮窗位置就被重置」。
+     * `orderListener -> applyOrderAndVisibility()` 每次都重读 prefs 顺序，
+     * 已足以让排序实时生效，且完全不碰 WindowManager.LayoutParams。
+     */
     fun onMove(from: Int, to: Int): Boolean {
         if (from !in defs.indices || to !in defs.indices) return false
         defs[from] = defs[to].also { defs[to] = defs[from] }
         saveOrder(prefs, defs.map { it.key })
         notifyItemMoved(from, to)
-        // ⭐ 直接通知已运行的悬浮窗重建行（stop/start 异步合并会导致顺序不生效）
         TpmsOverlayService.orderListener?.invoke()
-        onUiChanged()
         return true
     }
 }
