@@ -82,11 +82,12 @@ APP 底部四个标签页：
 
 ## 下载
 
-最新 Debug 构建（免安装包名 `.debug` 后缀）：
+最新构建（文件名不带变体后缀；包名仍是 `io.github.supit.rideassist.debug`）：
 
-- [apk/RideAssist-v1.0.1-debug.apk](apk/RideAssist-v1.0.1-debug.apk)
+- [apk/RideAssist-v1.0.11.apk](apk/RideAssist-v1.0.11.apk)
 
-> Debug 构建仅用于体验与测试，日常使用建议自行编译 Release 版。
+> `apk/` 目录里始终只保留最新一个包，文件名随版本递增。
+> Debug 构建用于体验与测试；`android:debuggable` 仍为 true。
 
 ## 构建
 

@@ -6,7 +6,13 @@
     python deploy.py --apk-only # 不重新构建，只更新现有 APK
 
 命名规则（固定名，覆盖式，目录里永远只有一个最新包）：
-    apk/RideAssist-v<版本>-<变体>.apk
+    apk/RideAssist-v<版本>.apk
+
+⚠️ 文件名**不带 -debug / -release 变体后缀**（用户 2026-11-08 要求去掉
+「-debug」这个看起来不正式的尾巴）。注意这只是**文件名**：
+包的 applicationId 仍然是 `io.github.supit.rideassist.debug`
+（debug buildType 的 `applicationIdSuffix`），改了它等于换一个 App，
+已装设备必须卸载重装、所有偏好清零 —— 所以命名简化不碰包名。
 """
 import os
 import re
@@ -104,11 +110,15 @@ def copy_to_apk_dir(apk_path, variant):
     os.makedirs(APK_DIR, exist_ok=True)
 
     version = read_version()
-    named = f"{PROJECT_NAME}-v{version}-{variant}.apk"
+    # ⭐ 文件名不带变体后缀（用户要求去掉 -debug）。
+    #    目录里本来就只留一个包，所以 debug / release 同名覆盖是预期行为。
+    named = f"{PROJECT_NAME}-v{version}.apk"
 
-    # 清掉该变体的旧版本文件（版本号升级后旧名残留）
+    # 清掉所有旧包：包括历史遗留的 `-debug` / `-release` 命名，
+    # 否则 `apk/` 里会同时躺着 `RideAssist-v1.0.11.apk` 和
+    # `RideAssist-v1.0.11-debug.apk` 两个内容相同的文件。
     for f in os.listdir(APK_DIR):
-        if f.startswith(PROJECT_NAME) and f.endswith(f"-{variant}.apk") and f != named:
+        if f.startswith(PROJECT_NAME) and f.endswith(".apk") and f != named:
             os.remove(os.path.join(APK_DIR, f))
 
     dst = os.path.join(APK_DIR, named)
