@@ -1041,9 +1041,13 @@ class RealtimeFragment : Fragment(), LocationListener {
         // ⭐⭐⭐ 第三道闸：**位移否决**。
         // 静止时 Location.getSpeed() 可能持续报 5~9km/h（贴窗/高楼下/刚定位），
         // 光靠速度阈值挡不干净；但同一段时间里位置几乎没动。
-        // 位移平均速度 < 6km/h 且跨度足够 → 强制解除锁存、本帧速度按 0 处理。
+        //
+        // ⚠️ 判据收在 SpeedDisplay.shouldVetoByDisplacement 里（有单测），
+        // 关键是带了「速度已达 15km/h 就不再用位移否决」的上限 ——
+        // 位移是窗口平均值、天然滞后，等红灯后起步时若严格按位移否决，
+        // 绿灯亮了速度表还会趴好几秒。
         val placeKmh = motionProbe.accept(loc.latitude, loc.longitude, loc.time)
-        val still = placeKmh >= 0f && placeKmh < SpeedDisplay.STILL_DISPLACEMENT_KMH
+        val still = SpeedDisplay.shouldVetoByDisplacement(kmh, placeKmh)
         if (still) tracker.resetMotionLatch()
         // ⭐⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径）。
         //    门控结论来自 Application 级的运动锁存：电流只在起步上锁，

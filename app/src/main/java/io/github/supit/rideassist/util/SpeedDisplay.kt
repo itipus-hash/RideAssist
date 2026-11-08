@@ -71,6 +71,39 @@ object SpeedDisplay {
     const val STILL_DISPLACEMENT_KMH = 6f
 
     /**
+     * 位移否决的**速度上限**：GPS 报的速度达到这个量级时，不再用位移去否决它。
+     *
+     * ## 为什么必须有这个上限（2026-11-08 补）
+     * 位移是「窗口平均」，天然滞后于瞬时速度。等红灯 10 秒后起步时，
+     * 窗口里全是静止点，平均位移要好几秒才涨上来 —— 若严格用位移否决，
+     * 起步头几秒速度会被压成 0，表现为「绿灯了速度表还不动」。
+     *
+     * 15km/h 是静止漂移**不可能**达到的量级（漂移一般在 1~9km/h），
+     * 所以到这个速度就直接信速度、不再看位移。
+     */
+    const val DISPLACEMENT_VETO_MAX_KMH = 15f
+
+    /**
+     * 本帧是否应该用「位移」否决 GPS 速度。
+     *
+     * @param gpsKmh 本帧 GPS 报的速度
+     * @param placeKmh 窗口内位移平均速度；**负数表示样本跨度不足、不下结论**
+     *
+     * 三条规则：
+     * 1. 位移样本不足 → 不否决（刚进页面 / 刚恢复 GPS，否则起步会被永久压住）
+     * 2. 位移确实在动（≥ [STILL_DISPLACEMENT_KMH]）→ 不否决
+     * 3. 速度本身已经达到 [DISPLACEMENT_VETO_MAX_KMH] → 不否决（信速度，
+     *    避免等红灯起步时被滞后的平均值按住）
+     *
+     * 剩下的情形就是「位置没动，却报低速」= 静止漂移，必须否决。
+     */
+    fun shouldVetoByDisplacement(gpsKmh: Float, placeKmh: Float): Boolean {
+        if (placeKmh < 0f) return false
+        if (placeKmh >= STILL_DISPLACEMENT_KMH) return false
+        return gpsKmh < DISPLACEMENT_VETO_MAX_KMH
+    }
+
+    /**
      * ⭐⭐ **这一帧的采样值要不要追加进速度曲线队列**。
      *
      * ## 修的是一个只修了一半的 bug（2026-11-08 用户二次反馈）

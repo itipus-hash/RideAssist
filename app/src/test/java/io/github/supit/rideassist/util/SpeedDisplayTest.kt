@@ -199,4 +199,36 @@ class SpeedDisplayTest {
         assertTrue(SpeedDisplay.shouldAppendSample(12, 0f))
         assertTrue(SpeedDisplay.shouldAppendSample(1, 0f))
     }
+
+    // ====== ⭐ 位移否决：只杀静止漂移，不能按住滑行/起步 ======
+
+    @Test fun `位移样本不足时不否决 否则起步会被永久压住`() {
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(8f, -1f))
+    }
+
+    @Test fun `位置没动却报低速 判为漂移`() {
+        assertTrue(SpeedDisplay.shouldVetoByDisplacement(5f, 0.5f))
+        assertTrue(SpeedDisplay.shouldVetoByDisplacement(9f, 2f))
+    }
+
+    @Test fun `真慢行不否决`() {
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(8f, 8f))
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(12f, 12f))
+    }
+
+    /**
+     * ⭐ 等红灯 10 秒后起步：位移窗口里全是静止点，平均位移还滞后在低位，
+     * 但速度已经到 20km/h —— 必须信速度，否则绿灯了速度表还趴着。
+     */
+    @Test fun `起步瞬间速度已达标时不因滞后的位移平均值而否决`() {
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(20f, 0f))
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(15f, 2f))
+        // 还差一点点（< 15km/h）仍按位移否决 —— 这正是静止漂移的量级
+        assertTrue(SpeedDisplay.shouldVetoByDisplacement(14.9f, 2f))
+    }
+
+    @Test fun `滑行中位移与速度一致 不否决`() {
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(40f, 38f))
+        assertFalse(SpeedDisplay.shouldVetoByDisplacement(6f, 6f))
+    }
 }
