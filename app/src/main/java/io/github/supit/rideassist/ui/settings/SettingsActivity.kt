@@ -10,6 +10,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.supit.rideassist.R
 import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.databinding.ActivitySettingsBinding
+import io.github.supit.rideassist.util.RelativeTime
 
 /**
  * 设置页（2026-10-20 重构）：
@@ -168,9 +169,21 @@ class SettingsActivity : AppCompatActivity() {
             getString(R.string.tpms_battery_normal)
         }
 
-    /** 相对时间（不带「更新于」前缀，用户要求）：<1min 刚刚，<10min N分钟前，≥10min 绝对时刻 */
+    /**
+     * 相对时间（不带「更新于」前缀）：<1min 刚刚，<10min N分钟前，
+     * 同一天 ≥10min 显示 HH:mm；**跨天则显示「昨天 HH:mm」/「N 天前 HH:mm」**。
+     * 天差判据与首页共用 [RelativeTime.daysAgo]，不另写一份。
+     */
     private fun relativeUpdateText(ts: Long): String {
-        val diffMin = (System.currentTimeMillis() - ts) / 60_000L
+        val now = System.currentTimeMillis()
+        val days = RelativeTime.daysAgo(ts, now)
+        if (days > 0) {
+            val label = if (days == 1) getString(R.string.tpms_rel_yesterday)
+            else getString(R.string.tpms_rel_days_ago, days)
+            return label + " " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                .format(java.util.Date(ts))
+        }
+        val diffMin = (now - ts) / 60_000L
         return when {
             diffMin < 1L -> getString(R.string.tpms_rel_just)
             diffMin < 10L -> getString(R.string.tpms_rel_min_ago, diffMin.toInt())

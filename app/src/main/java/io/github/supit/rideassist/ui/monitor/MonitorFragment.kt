@@ -27,6 +27,7 @@ import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.databinding.FragmentMonitorBinding
 import io.github.supit.rideassist.ui.diag.DiagActivity
 import io.github.supit.rideassist.ui.main.MainActivity
+import io.github.supit.rideassist.util.RelativeTime
 import io.github.supit.rideassist.util.VibrateHelper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -633,11 +634,20 @@ class MonitorFragment : Fragment() {
     private var lastTpmsState: TpmsMonitor.UiState? = null
 
     /**
-     * 相对时间文案（用户要求）：10 分钟内用「刚刚 / N分钟前」，
-     * 超过 10 分钟显示绝对时刻 HH:mm:ss。
+     * 相对时间文案：
+     * - ⭐ **不在今天**（按自然日）→ 「更新于 昨天」/「更新于 N 天前」，
+     *   跨天判据优先于分钟差（昨天 23:50 在今天 08:00 也算昨天）
+     * - 今天且 10 分钟内 →「刚刚 / N 分钟前」
+     * - 今天且超过 10 分钟 → 绝对时刻 HH:mm:ss（同一天，写时刻就够了）
      */
     private fun relativeUpdateText(ts: Long): String {
-        val diffMin = (System.currentTimeMillis() - ts) / 60_000L
+        val now = System.currentTimeMillis()
+        val days = RelativeTime.daysAgo(ts, now)
+        if (days > 0) return when (days) {
+            1 -> getString(R.string.tpms_update_yesterday)
+            else -> getString(R.string.tpms_update_days_ago, days)
+        }
+        val diffMin = (now - ts) / 60_000L
         return when {
             diffMin < 1L -> getString(R.string.tpms_update_just)
             diffMin < 10L -> getString(R.string.tpms_update_min_ago, diffMin.toInt())

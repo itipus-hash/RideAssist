@@ -313,6 +313,11 @@
     <string name="tpms_update_min_ago">更新于 %1$d 分钟前</string>
     <string name="tpms_rel_just">刚刚</string>
     <string name="tpms_rel_min_ago">%1$d 分钟前</string>
+    <!-- ⭐ 数据不在今天时按自然日显示，避免「更新于 21:56:31」看不出是哪天 -->
+    <string name="tpms_update_yesterday">更新于 昨天</string>
+    <string name="tpms_update_days_ago">更新于 %1$d 天前</string>
+    <string name="tpms_rel_yesterday">昨天</string>
+    <string name="tpms_rel_days_ago">%1$d 天前</string>
     <string name="tpms_binding_fmt">绑定中… %1$d 秒</string>
     <string name="tpms_bind_done">%1$s绑定成功（SN 尾号 %2$s）</string>
     <string name="tpms_bind_timeout">绑定超时，未检测到新传感器</string>
