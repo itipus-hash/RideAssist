@@ -285,6 +285,15 @@ class MonitorFragment : Fragment() {
     /** 点击「电池状态：异常」时浮出的具体告警项；null = 正常/无数据，点击无动作 */
     private var alarmDetailText: String? = null
 
+    /**
+     * 当前显示的告警弹窗。
+     *
+     * ⭐ 同一帧多条告警以前会连续 show 多个 AlertDialog 叠在一起，
+     * 用户关掉最上面一个才看到下一个。仓库层现在合并成一个事件，
+     * 这里再加一道保险：新事件到来先 dismiss 旧的。
+     */
+    private var alarmDialog: androidx.appcompat.app.AlertDialog? = null
+
     private fun renderTempSlots(data: BmsRealtimeData) {
         // 改名弹窗关闭回调可能晚于视图销毁（旋转/切页），先兜住
         if (_binding == null) return
@@ -1126,11 +1135,26 @@ class MonitorFragment : Fragment() {
     }
 
     private fun showAlarmDialog(event: io.github.supit.rideassist.data.repo.AlarmEvent) {
-        MaterialAlertDialogBuilder(requireContext())
+        // ⚠️ 视图已销毁时（切页/退后台的竞态）不要弹窗，否则 requireContext() 会崩
+        if (!isAdded) return
+        alarmDialog?.dismiss()
+
+        val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            .format(Date(if (event.timestamp > 0L) event.timestamp else System.currentTimeMillis()))
+        val message = buildString {
+            append(event.type)              // 具体告警项名，如「MOS 过温」
+            append("\n\n")
+            append(event.detail)           // 判据行（实测 vs 阈值）+ 完整实时读数
+            append("\n\n时间　")
+            append(time)
+        }
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.alarm_title)
-            .setMessage("${event.type}\n\n${event.detail}")
+            .setMessage(message)
             .setPositiveButton(R.string.confirm, null)
             .show()
+        alarmDialog = dialog
+        dialog.setOnDismissListener { if (alarmDialog === dialog) alarmDialog = null }
     }
 
     private fun renderConnectionState(state: ConnectionState) {

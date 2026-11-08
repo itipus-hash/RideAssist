@@ -141,6 +141,9 @@ class DiagActivity : AppCompatActivity() {
         // ---------- ① 原始累加器 ----------
         b.tvAccumulators.text = buildString {
             appendLine("记录状态：${if (s.isRecording) "● 记录中" else "○ 未记录"}")
+            // ⭐ 速度门控的原始状态：排查「松油门归零 / 静止漂移」时先看这两行
+            appendLine("运动锁存：${if (s.motionLatched) "● 已锁存（滑行不断速）" else "○ 未锁存（静止）"}")
+            appendLine("速度门控：${if (s.speedAllowed) "● 允许 GPS 速度" else "○ 锁 0"}")
             appendLine("累计里程　　${fmt(s.distanceKm, 3)} km")
             appendLine("放电耗能　　${fmt(s.energyWh, 2)} Wh")
             appendLine("回收电量　　${fmt(s.regenWh, 2)} Wh")

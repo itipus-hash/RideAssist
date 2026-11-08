@@ -729,16 +729,20 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
     }
 
     override fun onLocationChanged(location: Location) {
-        // ⚠️ 无速度解算（隧道 / 树荫）不能当 0 喂进去，会污染低通序列
-        if (!location.hasSpeed()) return
         val app = application as? YybmsApp ?: return
         val tracker = app.sessionTracker
-        // ⭐⭐ 与实时页同一门控：电流持续为 0（静止）时 GPS 漂移压成 0，
-        //    否则会话极速会凭空记出「速度_Max 5 km/h」这种假值。
-        //    状态只在 tracker 里一份，这里只读。
-        val shown = overlaySpeedFilter.push(
-            location.speed * 3.6f, tracker.speedAllowedByCurrent
-        )
+        // ⚠️ 无速度解算（隧道 / 树荫）不能当 0 喂进去，会污染低通序列。
+        //    但仍要用上一帧有效速度喂运动锁存，否则退后台进隧道时
+        //    15 秒没有速度帧就会误判「停稳」、把速度锁成 0。
+        if (!location.hasSpeed()) {
+            tracker.noteGpsSpeed(overlaySpeedFilter.realSpeed ?: 0f)
+            return
+        }
+        // ⭐⭐ 与实时页同一运动锁存（Application 级单例，一份状态）：
+        //    起步靠电流/持续高速 GPS 上锁，锁存后滑行电流为 0 仍照常记速度，
+        //    真正停稳才解锁并把静止 GPS 漂移压成 0。
+        val rawKmh = location.speed * 3.6f
+        val shown = overlaySpeedFilter.push(rawKmh, tracker.noteGpsSpeed(rawKmh))
         // 退后台后实时页已停 GPS，MoveGate 的第三路证据由这里续上；
         // APP 在前台时让实时页独占写入，避免两路互相覆盖。
         if (!app.isSelfForeground) tracker.liveSpeedKmh = overlaySpeedFilter.realSpeed

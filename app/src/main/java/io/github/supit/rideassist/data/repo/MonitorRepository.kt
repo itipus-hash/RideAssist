@@ -4,7 +4,6 @@ import io.github.supit.rideassist.core.ble.BleManager
 import io.github.supit.rideassist.core.ble.ConnectionState
 import io.github.supit.rideassist.core.protocol.YybmsCommand
 import io.github.supit.rideassist.core.protocol.YybmsPayloadParser
-import io.github.supit.rideassist.core.protocol.model.AlarmFlag
 import io.github.supit.rideassist.core.protocol.model.BmsRealtimeData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -102,16 +101,20 @@ class MonitorRepository(
         val prev = previous.effectiveAlarms().toSet()
         //⚠️ 用「集合差异」而不是「alarmFlags 变化」——
         // 电压类结论可能因实测电压变化而翻转，即使硬件位没动。
-        if (curr.isEmpty() || curr == prev) return
-        curr.forEach { flag ->
-            _alarmEvents.tryEmit(
-                AlarmEvent(
-                    type = flag.label,
-                    detail = buildAlarmDetail(merged, flag),
-                    timestamp = merged.timestamp,
-                )
+        //
+        // ⭐⭐ 只报**本帧新出现**的告警，并且一帧合并成**一个事件**：
+        // 旧版 `curr.forEach` 会在同一帧连发多条，UI 层连续 show 多个
+        // AlertDialog 叠在一起；而且某条告警消失时（curr != prev）会把
+        // 剩余几条**重新弹一遍**。用户看到的就是「弹了告警却看不出在警告啥」。
+        val added = curr - prev
+        if (added.isEmpty()) return
+        _alarmEvents.tryEmit(
+            AlarmEvent(
+                type = added.joinToString("、") { it.label },
+                detail = io.github.supit.rideassist.util.AlarmDetail.build(merged, added.toList()),
+                timestamp = merged.timestamp,
             )
-        }
+        )
     }
 
     /** 连接成功时启动轮询，断开时停止 */
@@ -172,39 +175,9 @@ class MonitorRepository(
         )
     }
 
-    /**
- * 告警详情文案 —— ⭐ **每项一行**，不要拼成一长串。
- *
- * 原来挤在一行里「总压 70.87V 电流 0.00A SOC 100% 压差 7mV」，
- * 在 AlertDialog 里横向铺满、要靠空格猜哪段是什么，很难读。
- * 分行后每项独立，扫一眼就清楚。
- */
-private fun buildAlarmDetail(data: BmsRealtimeData, flag: AlarmFlag): String = buildString {
-        append("总压　${"%.2f".format(data.totalVoltage)} V\n")
-        append("电流　${"%.2f".format(data.totalCurrent)} A\n")
-        append("SOC　${data.soc.toInt()} %")
-        if (data.cellDiff > 0f) append("\n压差　${data.cellDiff.toInt()} mV")
-
-        // ⭐ 电压类告警附上阈值，让用户能自己核对是不是真超了
-        when (flag) {
-            AlarmFlag.CELL_OVER_VOLTAGE -> {
-                append("\n最高单体　${"%.3f".format(data.maxCellVolt)} V")
-                if (data.hasProtectParams) {
-                    append("　（阈值 ${"%.3f".format(data.overVoltSet)} V）")
-                } else {
-                    append("　（阈值未读到）")
-                }
-            }
-            AlarmFlag.CELL_UNDERVOLTAGE -> {
-                val minV = data.cellVoltages.minOrNull() ?: 0f
-                append("\n最低单体　${"%.3f".format(minV)} V")
-                if (data.hasProtectParams && data.underVoltSet > 0f) {
-                    append("　（阈值 ${"%.3f".format(data.underVoltSet)} V）")
-                }
-            }
-            else -> Unit
-        }
-    }
+    // ⭐ 告警详情文案已抽到 util/AlarmDetail（每项给出「实测 vs 阈值」判据行 + 完整实测读数）。
+    //    旧版这里只列总压/电流/SOC/压差四个无关值，用户「看不出警告的啥」；
+    //    而且电流类/温度类告警完全没有对应读数。详见 util/AlarmDetail 的注释。
 }
 
 /** 曲线数据 */

@@ -17,6 +17,10 @@ import org.junit.Test
  * 2026-11-08 追加：**电流持续为 0 时速度必须锁 0**，用户原话
  * 「速度怎么会有 5km/h，这个大概率偏移造成啊，如果电流一直是0，
  * 那么速度保持为0」。下面同时锁住显示口径与电流证据状态。
+ *
+ * 2026-11-09 修订：用户反馈「行驶中一松开油门速度就归零」——
+ * 电流证据退居为**起步上锁**的辅助条件，锁存后的滑行由 GPS 速度维持，
+ * 详细状态机时序见 [MotionLatchTest]。
  */
 class SpeedDisplayTest {
 
@@ -114,23 +118,44 @@ class SpeedDisplayTest {
         assertNull(f.realSpeed)
     }
 
-    @Test fun `有电流证据才允许速度 断连帧不刷新`() {
+    @Test fun `电流证据只在起步上锁 断连帧不刷新`() {
         val t = SessionSpeedTracker()
-        assertFalse(t.speedAllowedByCurrent)              // 从未有过证据
+        val now = System.currentTimeMillis()
+        assertFalse(t.noteGpsSpeed(2f, now))               // 静止漂移、无证据 → 不上锁
         t.noteCurrentEvidence(0f, true)                   // 电流 0 → 不算证据
-        assertFalse(t.speedAllowedByCurrent)
-        t.noteCurrentEvidence(2.5f, true)                 // ≥ MoveGate.TH_CURRENT_A
-        assertTrue(t.speedAllowedByCurrent)
-        t.noteCurrentEvidence(9f, false)                  // 断连帧不刷新
-        assertTrue(t.speedAllowedByCurrent)
+        assertFalse(t.noteGpsSpeed(2f, now))
+        t.noteCurrentEvidence(2.5f, true)                   // ≥ MoveGate.TH_CURRENT_A → 上锁
+        assertTrue(t.noteGpsSpeed(40f, now))
+        t.noteCurrentEvidence(9f, false)                    // 断连帧不刷新证据
+        assertTrue(t.noteGpsSpeed(40f, now))                // 滑行由 GPS 速度维持
     }
 
-    @Test fun `resetSession 连电流证据一起清掉`() {
+    @Test fun `resetSession 连运动锁存一起清掉`() {
         val t = SessionSpeedTracker()
+        val now = System.currentTimeMillis()
         t.noteCurrentEvidence(3f, true)
-        assertTrue(t.speedAllowedByCurrent)
+        assertTrue(t.noteGpsSpeed(40f, now))
+        assertTrue(t.motionLatched)
+        assertTrue(t.speedAllowed)
         t.resetSession()
-        assertFalse(t.speedAllowedByCurrent)
+        assertFalse(t.motionLatched)
+        assertFalse(t.speedAllowed)
+    }
+
+    /**
+     * ⭐⭐ 电流曲线空白那个 bug 的根因锁死：
+     * [SessionSpeedTracker.updateRecordingState] 返回的是「状态是否发生迁移」，
+     * 不是「当前是否在记录」。四张曲线一律读 isRecording 属性。
+     */
+    @Test fun `updateRecordingState 返回状态迁移 不能当作是否在记录`() {
+        val t = SessionSpeedTracker()
+        assertFalse(t.isRecording)
+        assertTrue("首次启动应报告一次迁移", t.updateRecordingState(true, true))
+        assertTrue(t.isRecording)
+        assertFalse("状态未变化时返回 false", t.updateRecordingState(true, true))
+        assertTrue("但记录仍在进行 —— 曲线绝不能因此清空", t.isRecording)
+        assertFalse(t.updateRecordingState(false, true))   // 滑行电流回落不停记录
+        assertTrue(t.isRecording)
     }
 
     @Test fun `静止门控下 noteSpeed 收到 0 不会刷新极速`() {

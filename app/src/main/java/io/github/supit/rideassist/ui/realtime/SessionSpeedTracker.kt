@@ -42,14 +42,21 @@ class SessionSpeedTracker : ViewModel() {
     /**
      * ⭐⭐ 末次「有电流证据」的墙钟时刻（ms）。
      *
-     * 用户判据（2026-11-08）：「如果电流一直是 0，那么速度保持为 0」——
-     * 静止时 GPS 漂移 1~5 km/h 不该被记进会话极速。
-     * 这份状态**只在这里**（Application 级单例）维护一份；实时页与悬浮
-     * 前台服务两条 GPS 订阅都只读 [speedAllowedByCurrent]，不各自记时间。
+     * 静止时 GPS 漂移 1~5 km/h 不该被记进会话极速，电流是「起步」的可靠证据。
+     * 这份状态**只在这里**（Application 级单例）维护一份。
      */
     @Volatile
     var lastCurrentEvidenceMs: Long = 0L
         private set
+
+    /**
+     * ⭐⭐⭐ **运动锁存器：速度门控的唯一一份状态**。
+     *
+     * 实时页与悬浮前台服务两条 GPS 订阅都调 [noteGpsSpeed] 喂数，
+     * 读 [speedAllowed] 取结论；绝不各自持有锁存状态。
+     * 判据实现在 [io.github.supit.rideassist.util.MotionLatch]。
+     */
+    private val motionLatch = io.github.supit.rideassist.util.MotionLatch()
 
     /**
      * 每帧 BMS 数据喂一次。只有「有设备数据 且 电流达到 [MoveGate.TH_CURRENT_A]」
@@ -62,15 +69,31 @@ class SessionSpeedTracker : ViewModel() {
         }
     }
 
-    /** 当前是否允许把 GPS 速度当真（持续无电流证据超过宽限期 → false） */
-    val speedAllowedByCurrent: Boolean
+    /** 「近期有电流」只作起步证据，不再直接决定速度是否归零 */
+    private val hasCurrentEvidence: Boolean
         get() = System.currentTimeMillis() - lastCurrentEvidenceMs <=
-            SpeedDisplay.NO_CURRENT_GRACE_MS
+            SpeedDisplay.CURRENT_EVIDENCE_GRACE_MS
+
+    /**
+     * ⭐⭐ **GPS 帧的唯一喂数点**（实时页 / 悬浮前台服务 / GPS 丢失推算都走这里）。
+     * @return 本帧是否允许把 GPS 速度当真，直接传给 `SpeedDisplay.Filter.push()`
+     */
+    fun noteGpsSpeed(rawKmh: Float, nowMs: Long = System.currentTimeMillis()): Boolean =
+        motionLatch.update(rawKmh, hasCurrentEvidence, nowMs)
+
+    /** 不喂数、只查询：GPS 丢失推算 tick 与「是否跟踪 GPS 丢失」判据用 */
+    val speedAllowed: Boolean get() = motionLatch.isAllowed(System.currentTimeMillis())
+
+    /** 诊断面板用：当前是否处于「运动已锁存」 */
+    val motionLatched: Boolean get() = motionLatch.isLatched()
+
+    /** 手动复位运动锁存（清空会话 / 明确无 GPS 数据源时用） */
+    fun resetMotionLatch() = motionLatch.reset()
 
     /**
      * ⭐⭐ **会话极速的唯一写入口**。
      * 实时页与悬浮前台服务两条 GPS 订阅都调它，口径由 SpeedDisplay.Filter 统一。
-     * ⚠️ 传入的 shownKmh 必须已过 [speedAllowedByCurrent] 门控，
+     * ⚠️ 传入的 shownKmh 必须已过 [speedAllowed] 门控，
      *    静止漂移应在 Filter 里就被压成 0。
      * @return true = 刷新了记录（触发订阅方重渲）
      */
@@ -495,6 +518,8 @@ class SessionSpeedTracker : ViewModel() {
         val whPerKm = per100 * 1000f / 100f
         return DebugSnapshot(
             isRecording = isRecording,
+            motionLatched = motionLatched,
+            speedAllowed = speedAllowed,
             distanceKm = distanceKm,
             energyWh = energyWh,
             regenWh = regenWh,
@@ -521,6 +546,10 @@ class SessionSpeedTracker : ViewModel() {
     /** [debugSnapshot] 的返回结构 —— 诊断面板逐字段渲染 */
     data class DebugSnapshot(
         val isRecording: Boolean,
+        /** 运动锁存是否成立（速度门控的唯一状态，诊断面板用它排查「松油门归零」） */
+        val motionLatched: Boolean,
+        /** 当前是否允许把 GPS 速度当真（含「长时间无 GPS 帧自动解锁」） */
+        val speedAllowed: Boolean,
         val distanceKm: Double,
         val energyWh: Double,
         val regenWh: Double,
@@ -1000,6 +1029,7 @@ class SessionSpeedTracker : ViewModel() {
     fun resetSession() {
         maxSpeed = 0
         lastCurrentEvidenceMs = 0L
+        motionLatch.reset()
         rideStartWallMs = 0
         rideMovingMs = 0
         rideLastTickMs = 0

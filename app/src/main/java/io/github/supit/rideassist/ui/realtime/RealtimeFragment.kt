@@ -129,9 +129,10 @@ class RealtimeFragment : Fragment(), LocationListener {
         override fun run() {
             val est = lossEstimator
             if (gpsLostSinceMs == 0L) return
-            // ⭐⭐ 与 renderSpeed 同一门控：丢失期间若电流证据过期（车已停），
+            // ⭐⭐ 与 renderSpeed 同一门控：运动锁存解除（车真停稳）时，
             //    推算/保持速度一律归零并结束丢失态，不许继续往曲线里写旧速度。
-            if (!tracker.speedAllowedByCurrent) {
+            //    ⚠️ 不能用「电流证据」——滑行时电流为 0 但车还在动。
+            if (!tracker.speedAllowed) {
                 gpsLostHandler.removeCallbacks(this)
                 clearGpsLostState()
                 speedFilter.reset()
@@ -148,6 +149,9 @@ class RealtimeFragment : Fragment(), LocationListener {
             est?.update(SystemClock.elapsedRealtime())
             val shown = if (est != null && est.isEstimating) est.estimatedSpeed.toInt()
             else lastValidSpeed()
+            // ⭐ GPS 丢失期间没有真实速度帧，用推算/保持速度继续喂运动锁存：
+            //    只要推算速度仍 ≥5km/h，滑行中的锁存就不会因「没有 GPS 帧」而过期。
+            tracker.noteGpsSpeed(shown.toFloat())
             val b = _binding ?: return
             hasSpeedSignal = true
             renderSpeedColors(shown)
@@ -892,10 +896,10 @@ class RealtimeFragment : Fragment(), LocationListener {
 
         val kmh = loc.speed * 3.6f
         hasSpeedSignal = true
-        // ⭐⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径），
-        //    并显式传电流门控：电流持续为 0 时静止 GPS 漂移一律压成 0，
-        //    不许记进会话极速 / 曲线 / MoveGate 第三路证据。
-        val shown = speedFilter.push(kmh, tracker.speedAllowedByCurrent)
+        // ⭐⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径）。
+        //    门控结论来自 Application 级的运动锁存：电流只在起步上锁，
+        //    锁存后滑行（电流 0）由 GPS 速度维持，不会再把 40km/h 压成 0。
+        val shown = speedFilter.push(kmh, tracker.noteGpsSpeed(kmh))
         // ⭐ 把低通后的真实速度共享给应用级采集器（MoveGate 第三路证据）；
         //   门控生效时 realSpeed=null，第三路证据同步失效。
         tracker.liveSpeedKmh = speedFilter.realSpeed
@@ -919,6 +923,11 @@ class RealtimeFragment : Fragment(), LocationListener {
     private fun handleGpsLost(headingDegrees: Float) {
         val b = _binding ?: return
         val now = SystemClock.elapsedRealtime()
+
+        // ⭐ 本帧没有速度解算，但定位帧还是到了 —— 用「丢失前/推算速度」继续
+        //    喂运动锁存，避免隧道/树荫下因 15 秒没有速度帧而把滑行锁存误解除。
+        //    车真停稳时该值为 0，锁存会在 5 秒后自然解开。
+        tracker.noteGpsSpeed(lastValidSpeed().toFloat())
 
         // ⭐⭐ **还没开始运动 → 不跟踪丢失**（用户要求："现在还没有开始动，
         // 根本不应该出现这个和任何曲线"）。
@@ -1113,32 +1122,32 @@ class RealtimeFragment : Fragment(), LocationListener {
     }
 
     /**
-     * ⭐⭐ 静止（持续无电流证据）时不跟踪 GPS 丢失，也不启动推算器。
-     * 判据直接复用 Application 级单例 [SessionSpeedTracker.speedAllowedByCurrent]，
-     * 与 [renderSpeed] / 悬浮前台服务完全同源 —— 不再另写一份电流阈值。
+     * ⭐⭐ 车没真正在动（运动锁存未建立 / 已解除）时不跟踪 GPS 丢失，
+     * 也不启动推算器。判据直接复用 Application 级单例
+     * [SessionSpeedTracker.speedAllowed]，与 [renderSpeed] / 悬浮前台服务
+     * 完全同源 —— 不再另写一份电流阈值。
      */
     private fun shouldTrackGpsLoss(): Boolean =
-        isRecording() && tracker.speedAllowedByCurrent
+        isRecording() && tracker.speedAllowed
 
     /**
-     * 是否处于「记录中」。
+     * ⭐⭐⭐ **是否处于「记录中」—— 只读**，不再驱动状态机。
      *
-     * ⭐⭐ 来自 [SessionSpeedTracker] 的**锁存状态机**，不是瞬时电流判断。
+     * ## 这里修过一个很隐蔽的 bug（电流曲线整卡空白的真凶）
+     * 旧版有个 `isRecording(currentAmp)`，直接返回
+     * `tracker.updateRecordingState(...)` 的结果。而该函数的返回值是
+     * **「状态本次是否发生迁移」**（几乎恒为 false），不是「当前是否在记录」。
+     * 电流卡是四张卡里唯一传了 `currentAmp` 的，于是它每帧都拿到 false，
+     * 走「未开始记录」分支把 `chartCurrent` 的序列清空 ——
+     * 表现为「其他 3 张卡都有曲线，电流卡没有」。
+     *
+     * 更根本的问题是**状态机有两处驱动**：`YybmsApp` 应用级采集器已经在
+     * 每帧调 `updateRecordingState()`，实时页再调一次等于两份判据互相打架。
+     * 现在驱动点只保留 `YybmsApp` 一处，本页与四张曲线一律读锁存状态。
+     *
      * 用户需求："电流大于 1A 是启动记录的条件，启动记录后**持续记录**，
      * 直到出现停止记录的条件（断开保护板连接多久），
      * 而不是电流小于 1A 就不记录，而且把曲线隐藏了。"
-     *
-     * @param currentAmp 本帧电流；NaN 表示无数据（断连）
-     */
-    private fun isRecording(currentAmp: Float): Boolean {
-        val discharging = !currentAmp.isNaN() &&
-            currentAmp >= MoveGate.TH_CURRENT_A
-        return tracker.updateRecordingState(discharging, hasDeviceData = !currentAmp.isNaN())
-    }
-
-    /**
-     * 是否处于「记录中」（无电流参数的版本，给 GPS 相关逻辑用）。
-     * 读 [SessionSpeedTracker] 的锁存状态。
      */
     private fun isRecording(): Boolean = tracker.isRecording
 
@@ -1294,7 +1303,6 @@ class RealtimeFragment : Fragment(), LocationListener {
                         binding.tvCurrentNow, binding.tvCurrentStat, d.totalCurrent, UNIT_AMPERE,
                         decimals = currentDecimals(d.totalCurrent),
                         trackerNow = { tracker.currentNow = it },
-                        currentAmp = d.totalCurrent,
                         maxOverride = tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_CURRENT]?.value,
                         alwaysRecord = true
                     )
@@ -1401,23 +1409,20 @@ class RealtimeFragment : Fragment(), LocationListener {
         unit: String,
         decimals: Int = 0,
         trackerNow: (Float) -> Unit = {},
-        currentAmp: Float = Float.NaN,
         maxOverride: Float? = null,
         alwaysRecord: Boolean = false,
     ) {
         // ⭐⭐ **未开始记录 → 一律不画**。
         //
-        // ⭐ 判据来自锁存状态机 [isRecording]，**不是**瞬时电流：
-        // 用户需求"启动记录后持续记录……而不是电流小于 1A 就不记录，
-        // 而且把曲线隐藏了"。滑行/等红灯时电流会短暂掉到 1A 以下，
-        // 若用瞬时判断曲线会整段消失；用锁存器则全程连续记录，
-        // 电流回落的帧照样入队（值就是真实读数，能画出滑行段）。
+        // ⭐ 四张卡统一读 [isRecording] 的锁存状态（由 YybmsApp 应用级采集器
+        // 唯一驱动），**不是**瞬时电流：用户需求"启动记录后持续记录……而不是
+        // 电流小于 1A 就不记录，而且把曲线隐藏了"。滑行/等红灯时电流会短暂
+        // 掉到 1A 以下，若用瞬时判断曲线会整段消失；用锁存器则全程连续记录。
         //
-        // ⚠️ 优先用本次传入的**真实电流**驱动状态机（`currentAmp`），
-        // 而不是 `tracker.currentNow` —— 后者存在一拍滞后。
-        // NaN 表示调用方没传（redraw 路径），退回 tracker 的锁存状态。
-        val moving = if (currentAmp.isNaN()) isRecording()
-            else isRecording(currentAmp)
+        // ⚠️ 曾经电流卡单独传 `currentAmp` 去调 `updateRecordingState()`，
+        // 误把「状态是否变化」当成「是否在记录」，导致电流曲线每帧被清空。
+        // 状态机驱动点只能有一处，这里只读不写。
+        val moving = isRecording()
         if (!moving) {
             // ⚠️ 即使不画曲线，也要把当前值写回 tracker ——
             // 否则切页回来走 redrawFromTracker 时读到的是初始 0，

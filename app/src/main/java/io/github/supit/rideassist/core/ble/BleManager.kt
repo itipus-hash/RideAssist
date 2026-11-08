@@ -106,6 +106,20 @@ class BleManager(
          * 在 API 36 SDK 中已移除，这里直接用标准值，全版本兼容。
          */
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        /**
+         * 服务发现额外重跑次数。
+         *
+         * ⭐ 华为 TAS-AN00 上 `onServicesDiscovered(status=SUCCESS)` 偶尔会先给一份
+         * **空 / 未就绪的 GATT 缓存表**（服务在、特征列表却为空），几百毫秒后
+         * 重新发现就正常。旧版把它当致命错误，直接把
+         * 「特征值不匹配 write=false notify=false」弹给用户 ——
+         * 用户反馈「有时候打开 APP，会悬浮提示错误」即此。
+         */
+        const val MAX_SERVICE_DISCOVERY_RETRY = 2
+
+        /** 两次服务发现之间的间隔 */
+        const val SERVICE_DISCOVERY_RETRY_DELAY_MS = 400L
     }
 
     // ==================== 对外状态 ====================
@@ -160,6 +174,13 @@ class BleManager(
 
     /** 写入失败只记一次，避免每秒 8 帧把日志刷爆 */
     private var writeFailureLogged = false
+
+    /** 本次连接已重跑服务发现的次数；每次 connectGatt 前清零 */
+    @Volatile
+    private var serviceDiscoveryAttempts = 0
+
+    /** 服务发现重跑放在主线程，避免 Binder 回调线程里做延时调度 */
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     // ==================== 权限 ====================
 
@@ -381,6 +402,7 @@ class BleManager(
     private suspend fun tryConnectOnce(device: BluetoothDevice, timeoutMs: Long): Boolean {
         closeGatt()
         assembler.reset()
+        serviceDiscoveryAttempts = 0
 
         val signal = CompletableDeferred<Boolean>()
         connectSignal = signal
@@ -491,7 +513,10 @@ class BleManager(
             // status != 0 表示服务发现失败，必须记录原因
             Log.i(TAG, "onServicesDiscovered: status=$status (0=成功)")
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                _messages.tryEmit("服务发现失败 status=$status")
+                // ⭐ 内部调试信息只进日志。过去弹「服务发现失败 status=133」
+                // 这类瞬态错误，连接其实下一次重试就成功了，用户却以为 APP 坏了。
+                Log.w(TAG, "服务发现失败 status=$status，尝试重新发现")
+                if (retryServiceDiscovery(g)) return
                 connectSignal?.complete(false)
                 return
             }
@@ -515,7 +540,6 @@ class BleManager(
         private fun handleServices(g: BluetoothGatt?) {
             if (g == null) {
                 Log.w(TAG, "handleServices: gatt 为 null")
-                _messages.tryEmit("未发现服务")
                 connectSignal?.complete(false)
                 return
             }
@@ -524,17 +548,19 @@ class BleManager(
             // 不能靠猜——猜错会导致"连上了但收不到数据"。
             logGattTable(g)
 
-            val service = g.getService(BleUuids.SERVICE_UUID)
-                ?: BleUuids.ALT_SERVICE_UUIDS.firstNotNullOfOrNull { g.getService(it) }
-
-            if (service == null) {
-                Log.e(TAG, "handleServices: 未匹配到任何候选服务 UUID")
-                _messages.tryEmit("未找到彦阳服务，UUID 可能不匹配")
-                connectSignal?.complete(false)
+            // ⭐⭐ 不再要求「服务 UUID 先命中」：不同批次模组可能把 FFE1/FFE2
+            // 挂在别的服务下，或在缓存表里给出不完整的服务描述。
+            // 直接按特征 UUID 在**全部服务**里找，命中即可建通道。
+            if (setupCharacteristics(g)) {
+                connectSignal?.complete(true)
                 return
             }
-            Log.i(TAG, "handleServices: 命中服务 ${service.uuid}")
-            setupCharacteristics(g, service.uuid)
+
+            // 没找到可用通道 = 服务表大概率还没就绪（华为缓存表瞬态）。
+            // 重跑服务发现，不把内部调试串弹给用户。
+            if (retryServiceDiscovery(g)) return
+            Log.w(TAG, "handleServices: 多次服务发现后仍无数据通道，交给连接重试")
+            connectSignal?.complete(false)
         }
 
         /** 打印设备全部服务/特征/描述符，供现场核对 UUID */
@@ -613,20 +639,31 @@ class BleManager(
         }
     }
 
-    private fun setupCharacteristics(g: BluetoothGatt, serviceUuid: UUID) {
-        val service = g.getService(serviceUuid) ?: return
-        Log.i(TAG, "setupCharacteristics: 服务 ${service.uuid} 共 ${service.characteristics.size} 个特征")
+    /**
+     * 在**全部服务**里找数据通道，返回是否就绪。
+     *
+     * ## 两处修正（用户反馈「打开 APP 悬浮提示：特征值不匹配」）
+     * 1. 旧版只在「服务 UUID 命中」的那一个 service 下找特征。缓存表不全、
+     *    或模组把 FFE1/FFE2 挂在别的服务下时，`service.characteristics` 为空，
+     *    notify/write 双双为 false → 弹内部调试串。现在全表按 UUID 找。
+     * 2. 找不到通道**不再向用户报错**，也**不立刻判连接失败**：由
+     *    [retryServiceDiscovery] 重跑服务发现，彻底失败才交给外层 4 次连接重试。
+     *    连接状态卡本来就表达「连接中 / 连接失败」，不需要一条看不懂的 Toast。
+     */
+    private fun setupCharacteristics(g: BluetoothGatt): Boolean {
+        writeChar = null
+        notifyChar = null
 
-        //遍历全部特征并打日志
-        service.characteristics.forEach { ch ->
+        val all = g.services.flatMap { it.characteristics }
+        Log.i(TAG, "setupCharacteristics: ${g.services.size} 个服务 / ${all.size} 个特征")
+        all.forEach { ch ->
             Log.i(TAG, "  特征 ${ch.uuid} props=0x${Integer.toHexString(ch.properties)}")
         }
+        if (all.isEmpty()) {
+            Log.w(TAG, "setupCharacteristics: GATT 表为空，等待重新发现服务")
+            return false
+        }
 
-        /**
-         * 优先按 UUID 精确匹配——服务下通常有多个特征（如只读/只写分开），
-         * 单纯按属性取会被后面的特征覆盖，最终选错通道导致"连上但收不到数据"。
-         * UUID 匹配不到时才按属性兜底。
-         */
         fun hasNotify(ch: BluetoothGattCharacteristic) =
             ch.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0 ||
                     ch.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
@@ -635,30 +672,58 @@ class BleManager(
             ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
                     ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
 
-        // 1) 优先精确匹配配置里的 UUID
-        notifyChar = service.characteristics.firstOrNull { it.uuid == BleUuids.NOTIFY_UUID }
-            ?: service.characteristics.firstOrNull {
-                it.uuid != BleUuids.WRITE_UUID && hasNotify(it)
-            }
+        // 1) 精确 UUID（属性位可能因缓存过期不准，UUID 匹配不受影响）
+        // 2) 属性兜底，排除对面通道的 UUID，避免两条都选到同一个只读特征
+        notifyChar = all.firstOrNull { it.uuid == BleUuids.NOTIFY_UUID }
+            ?: all.firstOrNull { it.uuid != BleUuids.WRITE_UUID && hasNotify(it) }
+            ?: all.firstOrNull { hasNotify(it) }
 
-        writeChar = service.characteristics.firstOrNull { it.uuid == BleUuids.WRITE_UUID }
-            ?: service.characteristics.firstOrNull {
-                it.uuid != BleUuids.NOTIFY_UUID && hasWrite(it)
-            }
+        writeChar = all.firstOrNull { it.uuid == BleUuids.WRITE_UUID }
+            ?: all.firstOrNull { it.uuid != BleUuids.NOTIFY_UUID && hasWrite(it) }
+            ?: all.firstOrNull { hasWrite(it) }
 
         Log.i(TAG, "setupCharacteristics: notify=${notifyChar?.uuid}, write=${writeChar?.uuid}")
+        if (notifyChar == null || writeChar == null) {
+            // 只写日志：这是「服务表还没就绪」的瞬态，不是设备故障
+            Log.w(
+                TAG,
+                "setupCharacteristics: 数据通道不完整 " +
+                    "notify=${notifyChar != null} write=${writeChar != null}，等待重新发现"
+            )
+            notifyChar = null
+            writeChar = null
+            return false
+        }
 
         notifyChar?.let { enableNotification(g, it) }
+        return true
+    }
 
-        if (notifyChar != null && writeChar != null) {
-            connectSignal?.complete(true)
-        } else {
-            Log.e(TAG, "setupCharacteristics: 特征不完整 notify=${notifyChar != null} write=${writeChar != null}")
-            _messages.tryEmit(
-                "特征值不匹配 write=${writeChar != null} notify=${notifyChar != null}"
-            )
-            connectSignal?.complete(false)
-        }
+    /**
+     * 重跑一次 `discoverServices()`，返回 true 表示已安排重试、调用方应直接返回。
+     *
+     * ⚠️ 不在这里调 `refreshDeviceCache()`：那个隐藏 API 必须在 **GATT 已关闭**
+     * 且系统回调结束后调用，在连接中的 GATT 上调华为机型极易 ANR。
+     * 缓存清理由 [tryConnectOnce] 超时/失败路径负责。
+     */
+    private fun retryServiceDiscovery(g: BluetoothGatt): Boolean {
+        if (serviceDiscoveryAttempts >= MAX_SERVICE_DISCOVERY_RETRY) return false
+        serviceDiscoveryAttempts++
+        Log.i(
+            TAG,
+            "服务发现重跑 ${serviceDiscoveryAttempts}/$MAX_SERVICE_DISCOVERY_RETRY，" +
+                "${SERVICE_DISCOVERY_RETRY_DELAY_MS}ms 后执行"
+        )
+        mainHandler.postDelayed({
+            // 本次连接可能已经被 closeGatt / 重试替换，丢弃过期回调
+            if (g !== gatt) return@postDelayed
+            runCatching { g.discoverServices() }
+                .onFailure {
+                    Log.w(TAG, "重跑服务发现失败: ${it.message}")
+                    connectSignal?.complete(false)
+                }
+        }, SERVICE_DISCOVERY_RETRY_DELAY_MS)
+        return true
     }
 
     private fun enableNotification(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
@@ -674,7 +739,8 @@ class BleManager(
                 g.writeDescriptor(cccd)
             }
         } catch (e: SecurityException) {
-            _messages.tryEmit("开启通知失败：权限不足")
+            // 只写日志：瞬态的服务发现期间也会抛，弹给用户只会造成误报
+            Log.w(TAG, "开启通知失败：权限不足（等待重新发现）")
         }
     }
 
