@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import io.github.supit.rideassist.R
@@ -50,6 +51,27 @@ class RideDataFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // ⭐ 清空本次会话（从信息面板挪到数据页最底部，用户 2026-11-09）
+        binding.btnResetSession.setOnClickListener {
+            android.app.AlertDialog.Builder(requireContext())
+                .setTitle(R.string.diag_reset_title)
+                .setMessage(R.string.diag_reset_msg)
+                .setPositiveButton(R.string.confirm) { _, _ ->
+                    // ⭐ 只清会话内存。本地阈值 / 设备信息在独立的 device_cache 文件里，
+                    //    不会被这个按钮波及（用户 2026-11-08 明确要求）
+                    tracker.resetSession()
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.diag_reset_done) + "（本地阈值 / 设备缓存保留）",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    // 立即重绘：峰值 / 时长 / 平均值都要归零
+                    lastRevision = -1L
+                    render()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
         // 首次进入强制全量绘制
         lastRevision = -1L
         render()

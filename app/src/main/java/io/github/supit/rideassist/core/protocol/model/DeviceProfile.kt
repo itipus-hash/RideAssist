@@ -85,7 +85,7 @@ data class DeviceProfile(
         if (productName.isNotEmpty()) row("保护板型号", productName)
         if (firmwareVersion.isNotEmpty() && firmwareVersion != "--") row("版本", firmwareVersion)
         if (serialNumber.isNotEmpty()) row("SN", serialNumber)
-        if (batteryType >= 0) row("电池类型", batteryTypeName(batteryType))
+        if (batteryType >= 0) row("电芯类型", batteryTypeName(batteryType))
         // ⭐ 「电芯数量」一行（用户 2026-11-09）：17串/20串(最大支持)
         val cells = when {
             cellCount > 0 && maxCellNumSupported > 0 ->

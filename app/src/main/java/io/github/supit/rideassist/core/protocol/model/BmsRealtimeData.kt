@@ -730,7 +730,7 @@ fun deviceIdentity(): List<List<String>> {
         if (productName.isNotEmpty()) row("保护板型号", productName)
    if (firmwareVersion != "--") row("版本", firmwareVersion)
    if (serialNumber.isNotEmpty()) row("SN", serialNumber)
-   if (batteryType >= 0) row("电池类型", batteryTypeName)
+   if (batteryType >= 0) row("电芯类型", batteryTypeName)
         // ⭐ 「电芯数量」一行（与 DeviceProfile.identityRows 同口径）：
         //    17串/20串(最大支持)
         val cells = when {

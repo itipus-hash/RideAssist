@@ -103,24 +103,6 @@ class DiagActivity : AppCompatActivity() {
 
         setupDiagPrefs()
 
-        b.btnReset.setOnClickListener {
-            android.app.AlertDialog.Builder(this)
-                .setTitle(R.string.diag_reset_title)
-                .setMessage(R.string.diag_reset_msg)
-                .setPositiveButton(R.string.confirm) { _, _ ->
-                    // ⭐ 只清会话内存。本地阈值 / 设备信息在独立的 device_cache 文件里，
-                    //    不会被这个按钮波及（用户 2026-11-08 明确要求）
-                    tracker.resetSession()
-                    Toast.makeText(
-                        this,
-                        getString(R.string.diag_reset_done) + "（本地阈值 / 设备缓存保留）",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    render()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
     }
 
     override fun onStart() {
