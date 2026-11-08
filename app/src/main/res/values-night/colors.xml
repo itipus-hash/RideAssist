@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 历史曲线渐变色标（夜间）：整体提亮一档，避免深色底上发闷；
+         色相与日间保持一致，用户切换主题时不会觉得是另一张图 -->
+    <color name="chart_grad_top">#FF8E75</color>
+    <color name="chart_grad_mid1">#FFD86B</color>
+    <color name="chart_grad_mid2">#A5DE8C</color>
+    <color name="chart_grad_bottom">#5CE3C7</color>
+</resources>

@@ -183,22 +183,43 @@ class RealtimeFragment : Fragment(), LocationListener {
         _binding?.cardGpsLost?.visibility = View.GONE
     }
 
-    // ==================== 卡片交互（单击隐藏曲线 / 双击聚焦） ====================
+    // ==================== 卡片交互（单击聚焦 / 双击切曲线） ====================
+
+    /** 曲线显示模式（用户 2026-11-08 定案） */
+    private enum class CurveMode {
+        /** 不显示曲线（只留数值大字） */
+        OFF,
+
+        /** 实时曲线：固定步长滚动，最新点贴右边缘 */
+        LIVE,
+
+        /** 历史曲线：进入时的全量快照铺满一屏，彩色渐变，不随新数据变化 */
+        HISTORY,
+    }
 
     /**
-     * 曲线是否可见。
+     * 曲线显示模式。
      *
      * ⭐ **全局单一状态**，不是每卡一份。
      * 之前用 `BooleanArray(CARD_COUNT)`，聚焦态切卡时新旧卡片各自记一份状态，
      * 会出现「上一张显示曲线、切过去的那张不显示」的视觉撕裂。
-     * 曲线本来就是「双击任意处全局显隐」的操作，语义上就该是全局的。
+     * 曲线本来就是「双击任意处全局切换」的操作，语义上就该是全局的。
      *
-     * ⭐ **默认为 false**（用户要求"打开 APP 的时候，默认不显示曲线"）：
-     * 四条曲线叠在一起很乱，而且刚打开时队列里还没数据，
-     * 画出来只是一段贴底的平线，看了反而困惑。
-     * 想看曲线双击任意处即可显出。
+     * ⭐ **默认为 [CurveMode.OFF]**（用户要求"打开 APP 的时候，默认不显示曲线"）：
+     * 四条曲线叠在一起很乱，而且刚打开时队列里还没数据。
+     * 双击循环顺序：不显示 → 实时 → 历史 → 不显示。
      */
-    private var curveVisible: Boolean = false
+    private var curveMode: CurveMode = CurveMode.OFF
+
+    /**
+     * 历史模式的数据快照（索引与 [cardViews] 对齐）。
+     *
+     * ⭐ 用户选的是「**进入时快照**」：切到历史那一刻把四条队列各拷一份、
+     * 压缩一次，之后无论实时数据怎么长，画面都不再变化。
+     * 这样既不会每帧重算压缩（零抖动），也不会出现「看着看着 X 轴被压扁」。
+     * 退出历史模式后释放，切回来重新拍。
+     */
+    private val historySnapshots = arrayOfNulls<FloatArray>(CARD_COUNT)
 
     /**
      * 聚焦模式：只显示某一张卡（其余隐藏）。
@@ -278,8 +299,8 @@ class RealtimeFragment : Fragment(), LocationListener {
                     }
 
                     override fun onDoubleTap(e: MotionEvent): Boolean {
-                        // ⭐ 双击：切换曲线显隐（全局唯一状态）
-                        toggleAllCurves()
+                        // ⭐ 双击：循环切换 不显示 → 实时 → 历史
+                        cycleCurveMode()
                         return true
                     }
 
@@ -331,7 +352,8 @@ class RealtimeFragment : Fragment(), LocationListener {
                     return true
                 }
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    toggleAllCurves()
+                    // 与卡片层同一入口：三态是全局状态，两处必须一致
+                    cycleCurveMode()
                     return true
                 }
             }
@@ -367,7 +389,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         //「而且聚焦后，也没有默认不显示曲线（需要的话自己再切换）」）。
         // 聚焦是为了把一张卡看清楚，曲线此时是干扰项；
         // 想看曲线在聚焦态下双击即可打开。
-        curveVisible = false
+        setCurveMode(CurveMode.OFF, refresh = false)
         applyCardVisibility()
         // ⭐ 胎压卡数据订阅（聚焦速度卡时显示，用户要求）
         setupFocusTpms()
@@ -377,8 +399,8 @@ class RealtimeFragment : Fragment(), LocationListener {
     /**
      * 退出聚焦模式，返回默认布局（全部卡片可见）。
      *
-     * ⚠️ 不动[curveVisible]：默认就是「不显示曲线」，
-     * 若这里强制设true，退出聚焦会突然冒出四条线，与初始体验不一致。
+     * ⚠️ 不动[curveMode]：默认就是「不显示曲线」，
+     * 若这里强制设 LIVE，退出聚焦会突然冒出四条线，与初始体验不一致。
      * 保持用户当前的双击选择即可。
      */
     private fun exitFocus() {
@@ -387,10 +409,70 @@ class RealtimeFragment : Fragment(), LocationListener {
         applyCardVisibility(wasFocused = true)
     }
 
-    /** 切换曲线的全局显隐（任意位置双击都调这个）。 */
-    private fun toggleAllCurves() {
-        curveVisible = !curveVisible
-        applyCardVisibility()
+    /**
+     * **双击的唯一入口**：不显示 → 实时 → 历史 → 不显示。
+     *
+     * 用户 2026-11-08 定案的三态循环。语义：
+     * - [CurveMode.OFF]：只留数值大字，曲线区域保留 110dp 占位（不塌陷）
+     * - [CurveMode.LIVE]：固定步长滚动，最新点贴右边缘
+     * - [CurveMode.HISTORY]：进入瞬间拍快照，全量铺满一屏、彩色渐变，之后不再变化
+     */
+    private fun cycleCurveMode() {
+        val next = when (curveMode) {
+            CurveMode.OFF -> CurveMode.LIVE
+            CurveMode.LIVE -> CurveMode.HISTORY
+            CurveMode.HISTORY -> CurveMode.OFF
+        }
+        setCurveMode(next)
+    }
+
+    /**
+     * 设置曲线模式并刷新四张卡。
+     *
+     * @param refresh false 表示调用方自己会再调 [applyCardVisibility]（避免重复刷新）
+     */
+    private fun setCurveMode(mode: CurveMode, refresh: Boolean = true) {
+        val previous = curveMode
+        curveMode = mode
+        when (mode) {
+            CurveMode.HISTORY -> captureHistorySnapshot()
+            CurveMode.LIVE -> {
+                // 从历史/关闭切回实时：清掉快照立即回填当前曲线，
+                // 否则要等下一帧 GPS/BMS 数据才恢复，会有一瞬间空白
+                historySnapshots.fill(null)
+                if (refresh && previous != CurveMode.LIVE) redrawFromTracker()
+            }
+            CurveMode.OFF -> historySnapshots.fill(null)
+        }
+        if (refresh) applyCardVisibility()
+    }
+
+    /**
+     * 拍历史快照：四条队列各拷一份，按画布宽度做 min/max 包络压缩。
+     *
+     * ⭐ 用「按像素列取 min/max」而不是 LTTB / 道格拉斯-普克：
+     * 全局最大值所在桶的最大点就是它本人，**数学上不可能被抹掉**，
+     * 谷值和急刹突变同理；没有阈值可调，也不会断层。
+     *
+     * ⭐ 目标列数取画布可用宽度（px）：包络后最多 2×列数 个点，
+     * 与绘制像素量级一致，既不会过密发糊，也不会丢形状。
+     */
+    private fun captureHistorySnapshot() {
+        val b = _binding ?: return
+        val cols = b.chartSpeed.width.coerceAtLeast(b.chartPower.width)
+            .takeIf { it > 0 } ?: 720
+        historySnapshots[CARD_SPEED] = envelope(tracker.speedPoints, cols)
+        historySnapshots[CARD_POWER] = envelope(tracker.powerPoints, cols)
+        historySnapshots[CARD_CURRENT] = envelope(tracker.currentPoints, cols)
+        historySnapshots[CARD_DIFF] = envelope(tracker.diffPoints, cols)
+    }
+
+    private fun envelope(q: ArrayDeque<Float>, cols: Int): FloatArray {
+        val all = io.github.supit.rideassist.util.SeriesMath.all(q)
+        // ⭐ 全零（静止 / 断连）不画：那条贴底横线零信息量，
+        //    与实时模式 setSeriesIfActive 的 IDLE_EPSILON_MV 同口径
+        if (all.none { kotlin.math.abs(it) >= IDLE_EPSILON_MV }) return FloatArray(0)
+        return io.github.supit.rideassist.util.EnvelopeDownsampler.downsample(all, cols)
     }
 
     /**
@@ -512,7 +594,7 @@ class RealtimeFragment : Fragment(), LocationListener {
     /** 应用显隐状态到实际视图。
      *
      * 聚焦时：聚焦卡 VISIBLE + 时间卡 VISIBLE，其余卡 GONE（完全移出）。
-     * 非聚焦时：全部 VISIBLE + 时间卡 GONE，曲线按 [curveVisible] 用
+     * 非聚焦时：全部 VISIBLE + 时间卡 GONE，曲线按 [curveMode] 用
      * INVISIBLE 切换（保留 110dp 占位，页面不会跳动）。
      *
      * @param wasFocused 是否**从聚焦态退出**（只有这种场景才复位 padding + 滚动位置）。
@@ -565,7 +647,26 @@ class RealtimeFragment : Fragment(), LocationListener {
             releaseLossEstimator()
         }
         chartViews().forEachIndexed { index, chart ->
-            chart.setCurveVisible(curveVisible)
+            applyChartMode(index, chart)
+        }
+    }
+
+    /**
+     * 把当前 [curveMode] 应用到单张曲线控件。
+     *
+     * - OFF → INVISIBLE（保留 110dp 占位，卡片高度不塌陷）
+     * - LIVE → VISIBLE，数据由 `renderCurve` / `pushSpeedSample` 持续喂
+     * - HISTORY → VISIBLE + 灌入快照，之后不再随新数据变化
+     */
+    private fun applyChartMode(index: Int, chart: io.github.supit.rideassist.ui.widget.TrendChartView) {
+        when (curveMode) {
+            CurveMode.OFF -> chart.setCurveVisible(false)
+            CurveMode.LIVE -> chart.setCurveVisible(true)
+            CurveMode.HISTORY -> {
+                chart.setCurveVisible(true)
+                val snapshot = historySnapshots.getOrNull(index)
+                if (snapshot != null) chart.setHistorySeries(snapshot)
+            }
         }
     }
 
@@ -691,11 +792,20 @@ class RealtimeFragment : Fragment(), LocationListener {
         unit: String,
         maxOverride: Float? = null
     ) {
+        // ⭐ 历史模式下曲线已定格在快照上，回填只更新大字与统计，不许覆盖曲线
+        val historyFixed = curveMode == CurveMode.HISTORY
         // ⚠️ 与 renderCurve / redrawWithoutSampling 保持一致：全零不画
-        setSeriesIfActive(chart, q)
+        if (!historyFixed) setSeriesIfActive(chart, q)
         nowView.text = String.format("%.0f", now)
-        statView?.let { applyStat(it, statOf(q, unit, maxOverride)) }
+        statView?.let { applyStat(it, statOf(q, unit, maxOverride, statWindow(historyFixed))) }
     }
+
+    /**
+     * 统计窗口：实时模式只看最近 [SessionSpeedTracker.RECENT_WINDOW] 点（反映近期状态），
+     * 历史模式看全会话（用户要求 Min 取全会话最低值）。
+     */
+    private fun statWindow(historyFixed: Boolean): Int =
+        if (historyFixed) Int.MAX_VALUE else SessionSpeedTracker.RECENT_WINDOW
 
     override fun onResume() {
         super.onResume()
@@ -1193,33 +1303,45 @@ class RealtimeFragment : Fragment(), LocationListener {
     private fun pushSpeedSample(shown: Int) {
         val b = _binding ?: return
         val q = tracker.speedPoints
+        val historyFixed = curveMode == CurveMode.HISTORY
 
         // ⭐ 没有速度信号 → 清空曲线，不画
         if (!hasSpeedSignal) {
             if (q.isNotEmpty()) {
                 q.clear()
                 tracker.speedNow = 0f
-                b.chartSpeed.setSingleSeries(FloatArray(0))
+                if (!historyFixed) b.chartSpeed.setSingleSeries(FloatArray(0))
                 b.tvSpeedNow.text = getString(R.string.value_none)
             }
             return
         }
 
-        // ⭐ 有信号但**队列里全是 0**（静止被阈值归零）→ 同样不画。
-        // TrendChartView 只在 data.size<2 时跳过，队列里都是 0 会画出一条
-        // 贴底横线（用户反馈"没数值却画一根线"）。横线对"静止"零信息量，
-        // 不如留空 —— 等真动起来，第二个非零点进来就自然起线。
-        val allZero = shown == 0 && q.all { it == 0f }
-        if (allZero) {
+        // ⭐⭐ **0 值不再无脑入队**（用户二次反馈「速度卡片为什么会绘制一条 0 的线」）。
+        //
+        // 上一次的修法只挡住了「打开 APP 就一直静止」（队列全 0 → 不画），
+        // 但「跑过之后停车」是另一条路：队列 [30,20,10] + shown=0 时
+        // `allZero == false` → 0 被追加 → 之后每帧继续追加 → 贴底横线越长越长。
+        //
+        // 新规则（判据在 SpeedDisplay.shouldAppendSample，有单测锁住）：
+        // - shown > 0 → 正常入队
+        // - shown == 0 且尾部已经是 0 → 不入队（不延长横线）
+        // - shown == 0 且尾部不是 0（含空队列）→ 入队**一个** 0，让曲线落到基线
+        if (!io.github.supit.rideassist.util.SpeedDisplay
+                .shouldAppendSample(shown, q.peekLast())
+        ) {
             tracker.speedNow = 0f
-            b.chartSpeed.setSingleSeries(FloatArray(0))
             return
         }
 
         tracker.speedNow = shown.toFloat()
         if (q.size >= MAX_POINTS) q.removeFirst()
         q.addLast(shown.toFloat())
-        b.chartSpeed.setSingleSeries(q.toFloatArray())
+        // 历史模式曲线已定格，不再喂新数据（数据本身照常入队，供下次拍快照）
+        if (!historyFixed) {
+            b.chartSpeed.setSingleSeries(
+                io.github.supit.rideassist.util.SeriesMath.tail(q, RECENT_WINDOW)
+            )
+        }
         b.tvSpeedNow.text = String.format("%.0f", tracker.speedNow)
     }
 
@@ -1362,14 +1484,19 @@ class RealtimeFragment : Fragment(), LocationListener {
      */
     private fun redrawWithoutSampling() {
         val b = _binding ?: return
+        // ⭐ 历史模式下曲线已定格在快照上，断连重绘不许把它刷掉
+        val historyFixed = curveMode == CurveMode.HISTORY
         // ⚠️ 同样要过「全零不画」这道闸：静止时队列里全是 0，
         // 无条件重绘会画出贴底横线（用户要求"没有活动就不要画曲线"）
-        setSeriesIfActive(b.chartPower, tracker.powerPoints)
-        setSeriesIfActive(b.chartCurrent, tracker.currentPoints)
-        setSeriesIfActive(b.chartDiff, tracker.diffPoints)
-        applyStat(b.tvPowerStat, statOf(tracker.powerPoints, UNIT_WATT))
-        applyStat(b.tvCurrentStat, statOf(tracker.currentPoints, UNIT_AMPERE))
-        applyStat(b.tvDiffStat, statOf(tracker.diffPoints, UNIT_MV))
+        if (!historyFixed) {
+            setSeriesIfActive(b.chartPower, tracker.powerPoints)
+            setSeriesIfActive(b.chartCurrent, tracker.currentPoints)
+            setSeriesIfActive(b.chartDiff, tracker.diffPoints)
+        }
+        val w = statWindow(historyFixed)
+        applyStat(b.tvPowerStat, statOf(tracker.powerPoints, UNIT_WATT, window = w))
+        applyStat(b.tvCurrentStat, statOf(tracker.currentPoints, UNIT_AMPERE, window = w))
+        applyStat(b.tvDiffStat, statOf(tracker.diffPoints, UNIT_MV, window = w))
         // 大水印数值也保持上一次的真实值，不跳成 0
         b.tvPowerNow.text = String.format("%.0f", tracker.powerNow)
         // 电流同样遵循「负值 1 位小数」，否则充电时这里会显示成 -0
@@ -1388,8 +1515,11 @@ class RealtimeFragment : Fragment(), LocationListener {
         chart: io.github.supit.rideassist.ui.widget.TrendChartView,
         q: ArrayDeque<Float>
     ) {
-        val active = q.any { kotlin.math.abs(it) >= IDLE_EPSILON_MV }
-        chart.setSingleSeries(if (active) q.toFloatArray() else FloatArray(0))
+        // ⭐ 只取尾部窗口：队列现在是全会话保留，全量遍历+拷贝没必要，
+        //    TrendChartView 自己还会按 6dp 步长再裁到可视容量
+        val tail = io.github.supit.rideassist.util.SeriesMath.tail(q, RECENT_WINDOW)
+        val active = tail.any { kotlin.math.abs(it) >= IDLE_EPSILON_MV }
+        chart.setSingleSeries(if (active) tail else FloatArray(0))
     }
 
     /**
@@ -1423,6 +1553,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         // 误把「状态是否变化」当成「是否在记录」，导致电流曲线每帧被清空。
         // 状态机驱动点只能有一处，这里只读不写。
         val moving = isRecording()
+        // ⭐ 历史模式下曲线已定格在快照上，只更新大字与统计，不许覆盖曲线
+        val historyFixed = curveMode == CurveMode.HISTORY
         if (!moving) {
             // ⚠️ 即使不画曲线，也要把当前值写回 tracker ——
             // 否则切页回来走 redrawFromTracker 时读到的是初始 0，
@@ -1435,21 +1567,25 @@ class RealtimeFragment : Fragment(), LocationListener {
                 q.addLast(now)
             }
             // 保留队列不清空，一旦开动立刻能接着画
-            chart.setSingleSeries(FloatArray(0))
+            if (!historyFixed) chart.setSingleSeries(FloatArray(0))
             nowView.text = if (decimals > 0) String.format("%.${decimals}f", now)
             else String.format("%.0f", now)
-            applyStat(statView, statOf(q, unit, maxOverride))
+            applyStat(statView, statOf(q, unit, maxOverride, statWindow(historyFixed)))
             return
         }
 
         trackerNow(now)
         if (q.size >= MAX_POINTS) q.removeFirst()
         q.addLast(now)
-        chart.setSingleSeries(q.toFloatArray())
+        if (!historyFixed) {
+            chart.setSingleSeries(
+                io.github.supit.rideassist.util.SeriesMath.tail(q, RECENT_WINDOW)
+            )
+        }
         // 水印只写数值，单位由布局里独立的 TextView 承载（字号更小）
         nowView.text = if (decimals > 0) String.format("%.${decimals}f", now)
         else String.format("%.0f", now)
-        applyStat(statView, statOf(q, unit, maxOverride))
+        applyStat(statView, statOf(q, unit, maxOverride, statWindow(historyFixed)))
     }
 
     /**
@@ -1476,18 +1612,27 @@ class RealtimeFragment : Fragment(), LocationListener {
         q: ArrayDeque<Float>,
         unit: String,
         maxOverride: Float? = null,
+        window: Int = SessionSpeedTracker.RECENT_WINDOW,
     ): String {
         if (q.isEmpty()) return ""     // 无数据 → 空串，不是 "--"
         var mn = Float.MAX_VALUE
         var mx = -Float.MAX_VALUE
-        for (v in q) {
+        // ⭐ 从尾部倒着数 `window` 个点：实时模式只看近期（反映当前状态），
+        //    历史模式传 Int.MAX_VALUE 即全会话最低值（用户 2026-11-08 定案）。
+        //    用 descendingIterator 而不是 toFloatArray() —— 队列现在是全会话保留，
+        //    全量拷贝几万个点纯属浪费。
+        var counted = 0
+        val it = q.descendingIterator()
+        while (it.hasNext() && counted < window) {
+            val v = it.next()
+            counted++
             if (v < mn) mn = v
             if (v > mx) mx = v
         }
+        if (counted == 0) return ""
         // ⭐ 统一口径（用户要求）：三张卡的 Max 都用会话峰值
-        // （peakRecords[X].value，随会话落盘恢复）—— 滑动窗口只有最近
-        // 1800 点（约 30 分钟），骑行久了早期峰值会被滚动丢弃；
-        // Min 仍取窗口值（反映近期状态）
+        // （peakRecords[X].value，随会话落盘恢复）—— 窗口只有最近
+        // RECENT_WINDOW 点，骑行久了早期峰值会被滚动丢弃，所以要用会话峰值兜底
         if (maxOverride != null && maxOverride > mx) mx = maxOverride
         // ⚠️ 三个空格分隔：只有 1 个时读起来像"5mV最小"
         return String.format("Max %d%s   Min %d%s", mx.toInt(), unit, mn.toInt(), unit)
@@ -1553,7 +1698,10 @@ class RealtimeFragment : Fragment(), LocationListener {
         /** 采样容量统一由 Tracker 定义，避免两处数字不一致 */
         private const val MAX_POINTS = SessionSpeedTracker.MAX_POINTS
 
-        /** 卡片数量：速度 / 功率 / 电流 / 压差（索引与 curveVisible 对齐） */
+        /** 实时曲线的取数窗口 / 统计窗口，同样只由 Tracker 定义一份 */
+        private const val RECENT_WINDOW = SessionSpeedTracker.RECENT_WINDOW
+
+        /** 卡片数量：速度 / 功率 / 电流 / 压差（索引与 [CurveMode] 及快照数组对齐） */
         private const val CARD_COUNT = 4
 
         /**

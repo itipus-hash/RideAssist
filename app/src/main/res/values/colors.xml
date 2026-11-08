@@ -29,6 +29,15 @@
     <color name="chart_current">#EF6C00</color>
     <color name="chart_grid">#E0E0E0</color>
 
+    <!-- ⭐ 历史曲线的 Y 向渐变色标（值高=暖、值低=冷）。
+         ⚠️ shader 坐标固定在**画布 Y 轴**上，所以曲线高处自然橙红、
+         低处自然青绿，不需要按数据值逐点算颜色。
+         顺序必须与 TrendChartView 的 STOPS 对齐：0.00 / 0.45 / 0.72 / 1.00 -->
+    <color name="chart_grad_top">#FF6B4A</color>
+    <color name="chart_grad_mid1">#FFC93C</color>
+    <color name="chart_grad_mid2">#8AD46B</color>
+    <color name="chart_grad_bottom">#2FD4B3</color>
+
     <color name="background">#F5F6F8</color>
     <color name="surface">#FFFFFF</color>
 

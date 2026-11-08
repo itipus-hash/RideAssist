@@ -166,4 +166,37 @@ class SpeedDisplayTest {
         assertEquals(0, t.maxSpeed)
         assertEquals(before, t.speedRevisionFlow.value)
     }
+
+    // ============ ⭐ 速度曲线不能画出贴底 0 线（用户二次反馈） ============
+    //
+    // 上一次只修了「打开 APP 就一直静止」（队列全 0 不画）；
+    // 「跑过之后停车」时队列是 [30,20,10]，allZero 判不出来，
+    // 于是 0 被无限追加 → 一条越来越长的贴底横线。
+
+    @Test fun `停车首次落地允许追加一个 0`() {
+        assertTrue(SpeedDisplay.shouldAppendSample(30, null))
+        assertTrue(SpeedDisplay.shouldAppendSample(0, 30f))
+    }
+
+    @Test fun `已经落到底后不再追加 0 避免贴底横线`() {
+        assertFalse(SpeedDisplay.shouldAppendSample(0, 0f))
+        assertFalse(SpeedDisplay.shouldAppendSample(0, 0f))
+    }
+
+    @Test fun `静止一百帧最多只落地一次`() {
+        var last: Float? = 30f
+        var appended = 0
+        repeat(100) {
+            if (SpeedDisplay.shouldAppendSample(0, last)) {
+                appended++
+                last = 0f
+            }
+        }
+        assertEquals(1, appended)
+    }
+
+    @Test fun `重新起步后继续正常入队`() {
+        assertTrue(SpeedDisplay.shouldAppendSample(12, 0f))
+        assertTrue(SpeedDisplay.shouldAppendSample(1, 0f))
+    }
 }

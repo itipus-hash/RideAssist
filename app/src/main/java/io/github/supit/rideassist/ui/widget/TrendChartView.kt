@@ -1,13 +1,16 @@
 package io.github.supit.rideassist.ui.widget
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
-import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import io.github.supit.rideassist.R
 
 /**
@@ -15,6 +18,17 @@ import io.github.supit.rideassist.R
  *
  * 不引入三方图表库，纯 Canvas 实现，避免 APK 体积膨胀。
  * 曲线各自独立缩放（各自 max 归一化），共用横轴时间。
+ *
+ * ## 两种绘制模式
+ * - **实时模式**（[setSingleSeries]）：固定 6dp 步长，新点从右进、旧点匀速左移，
+ *   最新点贴右边缘；超出容量的点只裁掉绘制，不丢数据（数据在 Tracker 里）。
+ * - **历史模式**（[setHistorySeries]）：全量数据铺满整块画布，X 轴按索引线性映射，
+ *   **不滚动**。用于「双击切到历史曲线」看整段行程趋势。
+ *
+ * ⭐ 历史模式用**沿画布 Y 轴的 LinearGradient** 给描边和填充上色：
+ * 曲线高处自然橙红、低处自然青绿。颜色与数据值无关，
+ * 是 shader 坐标固定在画布上带来的效果 —— 不需要逐点算色，
+ * 也不会因为采样点密度变化而出现色带断裂。
  */
 class TrendChartView @JvmOverloads constructor(
     context: Context,
@@ -22,15 +36,34 @@ class TrendChartView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
+    companion object {
+        /** 历史渐变的色标位置，必须与 colors.xml 里四个颜色的顺序对齐 */
+        private val GRAD_STOPS = floatArrayOf(0f, 0.45f, 0.72f, 1f)
+
+        /** 历史曲线描边宽度（dp） */
+        private const val HISTORY_STROKE_DP = 2.5f
+
+        /** 历史曲线填充透明度：日间 / 夜间 */
+        private const val FILL_ALPHA_DAY = 0.22f
+        private const val FILL_ALPHA_NIGHT = 0.18f
+    }
+
     private var socData: FloatArray = FloatArray(0)
     private var voltageData: FloatArray = FloatArray(0)
     private var currentData: FloatArray = FloatArray(0)
+
+    /** 历史模式的全量数据（已做过 min/max 包络压缩） */
+    private var historyData: FloatArray = FloatArray(0)
+    private var historyMode = false
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 4f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
+    }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
     }
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -46,6 +79,17 @@ class TrendChartView @JvmOverloads constructor(
     private val voltageColor = ContextCompat.getColor(context, R.color.chart_voltage)
     private val currentColor = ContextCompat.getColor(context, R.color.chart_current)
 
+    /** 历史渐变资源色（夜间由 values-night/colors.xml 覆盖） */
+    private var gradTop = ContextCompat.getColor(context, R.color.chart_grad_top)
+    private var gradMid1 = ContextCompat.getColor(context, R.color.chart_grad_mid1)
+    private var gradMid2 = ContextCompat.getColor(context, R.color.chart_grad_mid2)
+    private var gradBottom = ContextCompat.getColor(context, R.color.chart_grad_bottom)
+
+    /** 渐变 shader 缓存：key = top|bottom|night，尺寸或主题变化才重建 */
+    private var strokeShader: LinearGradient? = null
+    private var fillShader: LinearGradient? = null
+    private var shaderKey: String = ""
+
     private val leftPadding = 16f
     private val rightPadding = 16f
     private val topPadding = 16f
@@ -58,9 +102,6 @@ class TrendChartView @JvmOverloads constructor(
      * 固定间距意味着每来一个新点，曲线是**从右边向左生长**，
      * 旧点等距向左滚出画布 —— 而不是把整条曲线压缩重排
      * （后者会让曲线整体抖动，且看不出"滚动了多久"）。
-     *
-     * 取值 6dp：3 分钟 180 点 × 6dp = 1080dp，足够宽；
-     * 在 360dp 宽的屏幕上可见约 60 点（1 分钟），符合实时页"看最近走势"的需求。
      */
     private val stepXPx = 6f * resources.displayMetrics.density
 
@@ -68,9 +109,26 @@ class TrendChartView @JvmOverloads constructor(
     private val chartRight: Float
         get() = width - rightPadding
 
-    /** 单序列模式：只画一条线（如功率/压差），并显示最大值/最小值 */
+    /** 单序列模式（实时）：只画一条线，固定步长滚动 */
     fun setSingleSeries(values: FloatArray) {
+        historyMode = false
+        historyData = FloatArray(0)
         socData = values
+        voltageData = FloatArray(0)
+        currentData = FloatArray(0)
+        invalidate()
+    }
+
+    /**
+     * 历史模式：把**全量**数据铺满整块画布，并按 Y 向渐变上色。
+     *
+     * ⚠️ 与 [setSingleSeries] 互斥 —— 调用这个之后，实时采样必须停止喂数据，
+     * 否则会被立刻覆盖回滚动模式。
+     */
+    fun setHistorySeries(values: FloatArray) {
+        historyMode = true
+        historyData = values
+        socData = FloatArray(0)
         voltageData = FloatArray(0)
         currentData = FloatArray(0)
         invalidate()
@@ -78,10 +136,11 @@ class TrendChartView @JvmOverloads constructor(
 
     /** 序列内的最大值与最小值（空序列返回 null） */
     fun range(): Pair<Float, Float>? {
-        if (socData.isEmpty()) return null
+        val data = if (historyMode) historyData else socData
+        if (data.isEmpty()) return null
         var mn = Float.MAX_VALUE
         var mx = -Float.MAX_VALUE
-        for (v in socData) {
+        for (v in data) {
             if (v < mn) mn = v
             if (v > mx) mx = v
         }
@@ -102,9 +161,24 @@ class TrendChartView @JvmOverloads constructor(
     fun isCurveVisible(): Boolean = visibility == View.VISIBLE
 
     fun setData(soc: List<Float>, voltage: List<Float>, current: List<Float>) {
+        historyMode = false
+        historyData = FloatArray(0)
         socData = soc.toFloatArray()
         voltageData = voltage.toFloatArray()
         currentData = current.toFloatArray()
+        invalidate()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        super.onConfigurationChanged(newConfig)
+        // 夜间开关若没有重建 Activity（声明了 configChanges），
+        // 资源色不会自动刷新 —— 这里主动重取并作废 shader 缓存
+        gradTop = ContextCompat.getColor(context, R.color.chart_grad_top)
+        gradMid1 = ContextCompat.getColor(context, R.color.chart_grad_mid1)
+        gradMid2 = ContextCompat.getColor(context, R.color.chart_grad_mid2)
+        gradBottom = ContextCompat.getColor(context, R.color.chart_grad_bottom)
+        axisPaint.color = ContextCompat.getColor(context, R.color.chart_grid)
+        shaderKey = ""
         invalidate()
     }
 
@@ -115,6 +189,11 @@ class TrendChartView @JvmOverloads constructor(
         if (chartWidth <= 0 || chartHeight <= 0) return
 
         drawGrid(canvas, chartWidth, chartHeight)
+
+        if (historyMode) {
+            drawHistorySeries(canvas, chartWidth, chartHeight)
+            return
+        }
 
         drawSeries(canvas, socData, socColor, chartWidth, chartHeight)
         drawSeries(canvas, voltageData, voltageColor, chartWidth, chartHeight)
@@ -153,6 +232,7 @@ class TrendChartView @JvmOverloads constructor(
         val range = (upper - lower).takeIf { it > 0f } ?: 1f
 
         linePaint.color = color
+        linePaint.shader = null
         val path = Path()
 
         // ⭐⭐ **固定像素间距 + 从左侧裁剪**（用户要求："曲线永远只占一个屏幕，
@@ -196,5 +276,93 @@ class TrendChartView @JvmOverloads constructor(
         linePaint.style = Paint.Style.FILL
         canvas.drawCircle(endX, lastY, 6f, linePaint)
         linePaint.style = Paint.Style.STROKE
+    }
+
+    /**
+     * 历史模式：全量数据铺满画布 + Y 向渐变描边与填充。
+     *
+     * X 轴按**索引**线性映射（不是时间轴，采样间隔不均匀也不会有空洞），
+     * Y 轴把数据的 min..max 拉伸到整块绘图区 —— 于是渐变上端恰好是最大值、
+     * 下端恰好是最小值，颜色与数值严格对应。
+     */
+    private fun drawHistorySeries(canvas: Canvas, chartWidth: Float, chartHeight: Float) {
+        val data = historyData
+        if (data.size < 2) return
+
+        var mn = Float.MAX_VALUE
+        var mx = -Float.MAX_VALUE
+        for (v in data) {
+            if (v < mn) mn = v
+            if (v > mx) mx = v
+        }
+        val top = topPadding
+        val bottom = topPadding + chartHeight
+        val stepX = chartWidth / (data.size - 1).toFloat()
+
+        // ⭐ Y 映射的判据在 HistoryCurve（纯函数 + 单测）：
+        // ratio=1 是最大值 → 画布顶部 → shader 0f 位置 → 暖色（橙红）
+        // ratio=0 是最小值 → 画布底部 → shader 1f 位置 → 冷色（青绿）
+        val line = Path()
+        for (i in data.indices) {
+            val x = leftPadding + stepX * i
+            val ratio = io.github.supit.rideassist.util.HistoryCurve
+                .verticalRatio(data[i], mn, mx)
+            val y = bottom - chartHeight * ratio
+            if (i == 0) line.moveTo(x, y) else line.lineTo(x, y)
+        }
+
+        ensureShaders(top, bottom)
+
+        // ① 填充：沿曲线走一遍，再落到底边闭合
+        val fill = Path(line)
+        fill.lineTo(leftPadding + chartWidth, bottom)
+        fill.lineTo(leftPadding, bottom)
+        fill.close()
+        fillPaint.shader = fillShader
+        canvas.drawPath(fill, fillPaint)
+
+        // ② 描边（shader 沿画布 Y 固定 → 高处橙红、低处青绿）
+        linePaint.style = Paint.Style.STROKE
+        linePaint.strokeWidth = HISTORY_STROKE_DP * resources.displayMetrics.density
+        linePaint.strokeCap = Paint.Cap.ROUND
+        linePaint.strokeJoin = Paint.Join.ROUND
+        linePaint.shader = strokeShader
+        canvas.drawPath(line, linePaint)
+
+        // ③ 末端点
+        val lastRatio = io.github.supit.rideassist.util.HistoryCurve
+            .verticalRatio(data.last(), mn, mx)
+        val lastY = bottom - chartHeight * lastRatio
+        linePaint.style = Paint.Style.FILL
+        canvas.drawCircle(
+            leftPadding + chartWidth, lastY,
+            5f * resources.displayMetrics.density, linePaint
+        )
+
+        // 恢复默认，下一条曲线（或切回实时模式）不受影响
+        linePaint.style = Paint.Style.STROKE
+        linePaint.shader = null
+        linePaint.strokeWidth = 4f
+        fillPaint.shader = null
+    }
+
+    private fun ensureShaders(top: Float, bottom: Float) {
+        val night = (resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val key = "$top|$bottom|$night"
+        if (key == shaderKey && strokeShader != null && fillShader != null) return
+
+        val colors = intArrayOf(gradTop, gradMid1, gradMid2, gradBottom)
+        strokeShader = LinearGradient(
+            0f, top, 0f, bottom, colors, GRAD_STOPS, Shader.TileMode.CLAMP
+        )
+        val alpha = if (night) FILL_ALPHA_NIGHT else FILL_ALPHA_DAY
+        val fillColors = IntArray(colors.size) {
+            ColorUtils.setAlphaComponent(colors[it], (alpha * 255).toInt())
+        }
+        fillShader = LinearGradient(
+            0f, top, 0f, bottom, fillColors, GRAD_STOPS, Shader.TileMode.CLAMP
+        )
+        shaderKey = key
     }
 }

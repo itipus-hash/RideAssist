@@ -51,6 +51,32 @@ object SpeedDisplay {
     /** 超过这么久没有任何 GPS 帧 → 自动解锁，防止陈旧速度证据挂死 */
     const val MOTION_GPS_STALE_MS = 15_000L
 
+    /**
+     * ⭐⭐ **这一帧的采样值要不要追加进速度曲线队列**。
+     *
+     * ## 修的是一个只修了一半的 bug（2026-11-08 用户二次反馈）
+     * `TrendChartView` 只在 `data.size < 2` 时跳过绘制，所以队列里
+     * **≥2 个 0 就会画出一条贴底的横线**。
+     *
+     * 上一次的修法是「队列里全是 0 就不画」（`allZero` 判断），
+     * 那只挡住了「打开 APP 就一直静止」。**跑过之后停车**走的是另一条路：
+     * 队列是 `[30,20,10]`，`shown` 变 0 时 `allZero == false`，
+     * 于是 0 被追加；之后每帧继续追加 0 → 一条越来越长的贴底横线。
+     *
+     * 新规则：
+     * - `shown > 0` → 正常追加
+     * - `shown == 0` 且尾部已经是 0 → **不追加**（不再延长横线）
+     * - `shown == 0` 且尾部不是 0（含空队列）→ 追加**一个** 0，
+     *   让曲线自然落到基线，能看出「停下来了」
+     *
+     * @param shown 本帧显示速度（已过 5km/h 归零 + 取整）
+     * @param lastSample 队列里最后一个采样值；null = 队列为空
+     */
+    fun shouldAppendSample(shown: Int, lastSample: Float?): Boolean {
+        if (shown > 0) return true
+        return lastSample != 0f
+    }
+
     class Filter {
         private var filtered: Float? = null
 
