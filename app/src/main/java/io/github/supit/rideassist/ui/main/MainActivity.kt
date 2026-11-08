@@ -1,5 +1,6 @@
 package io.github.supit.rideassist.ui.main
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.MenuItem
@@ -7,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.github.supit.rideassist.R
+import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.databinding.ActivityMainBinding
 import io.github.supit.rideassist.ui.cells.CellDetailFragment
 import io.github.supit.rideassist.ui.realtime.RealtimeFragment
