@@ -137,7 +137,13 @@ class DiagActivity : AppCompatActivity() {
                     else snap?.toDisplayData() ?: app.lastRealtime
                     val stamp = if (d.hasDeviceData) 0L
                     else snap?.savedAtMs ?: app.lastRealtimeAtMs
-                    renderDevice(shown, live = d.hasDeviceData, savedAtMs = stamp)
+                    renderDevice(
+                        shown,
+                        live = d.hasDeviceData,
+                        savedAtMs = stamp,
+                        profile = io.github.supit.rideassist.data.prefs.DeviceProfileStore
+                            .load(app.deviceCache),
+                    )
                     renderAlarms(d)
                 }
             }
@@ -156,39 +162,6 @@ class DiagActivity : AppCompatActivity() {
     private fun render() {
         val s = tracker.debugSnapshot()
 
-        // ---------- ① 原始累加器 ----------
-        b.tvAccumulators.text = buildString {
-            appendLine("记录状态：${if (s.isRecording) "● 记录中" else "○ 未记录"}")
-            // ⭐ 速度门控的原始状态：排查「松油门归零 / 静止漂移」时先看这两行
-            appendLine("运动锁存：${if (s.motionLatched) "● 已锁存（滑行不断速）" else "○ 未锁存（静止）"}")
-            appendLine("速度门控：${if (s.speedAllowed) "● 允许 GPS 速度" else "○ 锁 0"}")
-            appendLine("骑行时长　　${fmtMs(s.rideMovingMs)}")
-            appendLine("行程用时　　${fmtMs(s.tripElapsedMs)}")
-            appendLine("采样点　　　速${s.speedPoints} 功${s.powerPoints} 流${s.currentPoints} 压${s.diffPoints}")
-        }
-
-        // ---------- ② 预计里程的分子分母并排 ----------
-        // ⭐ 三项同时显示：任何一个不合理都能立刻定位是分子还是分母
-        b.tvRangeBreakdown.text = buildString {
-            appendLine("公式：预计里程 = 剩余能量 ÷ 单位电耗")
-            appendLine()
-            appendLine("分子 剩余容量　${fmt(s.remainingAh.toDouble(), 2)} Ah")
-            appendLine("　　 标称总压　${fmt(s.nominalVolt.toDouble(), 2)} V")
-            appendLine("　　 剩余能量　${fmt(s.remainWh.toDouble(), 1)} Wh")
-            appendLine()
-            appendLine("分母 百公里电耗${fmt(s.per100Km.toDouble(), 3)} kWh/100km")
-            appendLine("　　 单位电耗　${fmt(s.whPerKm.toDouble(), 2)} Wh/km")
-            appendLine()
-            val verdict = if (s.estimatedRangeKm > 0f) "%.1f km".format(s.estimatedRangeKm)
-            else "样本不足（里程或电耗为 0）"
-            appendLine("结果　　　　　$verdict")
-            appendLine()
-            appendLine("⭐ 不变性：停车时分子只能降或持平")
-            appendLine("　　　　　　分母冻结 → 结果绝不会上涨")
-        }
-
-        // ---------- ③ 移动判定 ----------
-
         // ---------- ④ 派生指标 ----------
         // ⚠️ 原来的「压差趋势斜率」已删除（用户 2026-11-08：「根本没用」）：
         // 它以 mV/min 做线性回归，压差本身在 4~8mV 量级抖动，斜率几乎全是噪声，
@@ -198,9 +171,14 @@ class DiagActivity : AppCompatActivity() {
                 appendLine("实测有效容量　${fmt(s.measuredCapacityAh.toDouble(), 2)} Ah")
                 appendLine("实测 SOH　　　${fmt(s.measuredSoh.toDouble(), 1)} %")
             } else {
-                appendLine("实测有效容量　样本不足")
-                appendLine("　　　　　　 （已跟踪 SOC 跨度 ${fmt(s.socSpanTracked.toDouble(), 1)}%，")
-                appendLine("　　　　　　　　需满 ${SessionSpeedTracker.MIN_SOC_SPAN_FOR_CAPACITY.toInt()}%）")
+                // ⚠️ 不能分两行（用户要求）：合并成一行，靠缩短文案放得下
+                append(
+                    "实测有效容量　样本不足（已跟踪 SOC 跨度 %.1f%%，需满 %d%%）"
+                        .format(
+                            s.socSpanTracked,
+                            SessionSpeedTracker.MIN_SOC_SPAN_FOR_CAPACITY.toInt()
+                        )
+                )
             }
         }
     }
@@ -345,6 +323,9 @@ fun addRow(cells: List<String>, isHeader: Boolean) {
          setTextAppearance(R.style.DiagCell)
      text = cell
             gravity = when {
+                // ⭐ 缺失值（`-`）居中：右对齐时它会孤零零贴在列的最右边，
+                //    看着像"忘了填"。居中后至少视觉上是"这里没有值"（用户要求）
+                cell == "-" -> android.view.Gravity.CENTER
                 c < numericFrom -> android.view.Gravity.START
                 centerValues -> android.view.Gravity.CENTER
                 else -> android.view.Gravity.END
@@ -428,7 +409,28 @@ header?.let { addRow(it, isHeader = true) }
         }
     }
 
-    private fun renderDevice(d: BmsRealtimeData, live: Boolean, savedAtMs: Long = 0L) {
+    private fun renderDevice(
+        raw: BmsRealtimeData,
+        live: Boolean,
+        savedAtMs: Long = 0L,
+        profile: io.github.supit.rideassist.core.protocol.model.DeviceProfile? = null,
+    ) {
+        // ⚠️ 快照/实时数据里可能**缺设备信息帧的字段**（电池类型、固件、探头数、
+        //    串数），只靠实时帧就会显示成「-- / 未读到」，看着像缓存不全。
+        //    这里用 DeviceProfile 缓存兜底：设备信息帧比实时帧到得晚，
+        //    但它的值早就存在 device_cache 里了。
+        val d = raw.copy(
+            batteryType = if (raw.batteryType >= 0) raw.batteryType
+            else profile?.batteryType ?: -1,
+            firmwareVersion = raw.firmwareVersion
+                .takeIf { it.isNotBlank() && it != "--" }
+                ?: profile?.firmwareVersion?.takeIf { it.isNotBlank() } ?: "--",
+            tempProbeCount = if (raw.tempProbeCount > 0) raw.tempProbeCount
+            else profile?.tempProbeCount ?: 0,
+            cellCount = if (raw.cellCount > 0) raw.cellCount else profile?.cellCount ?: 0,
+            maxCellNumSupported = if (raw.maxCellNumSupported > 0) raw.maxCellNumSupported
+            else profile?.maxCellNumSupported ?: 0,
+        )
         b.tvDevice.text = buildString {
             appendLine("电池　${d.batteryTypeName} / ${d.cellCount} 串" +
                 if (d.maxCellNumSupported > 0) "（最大支持 ${d.maxCellNumSupported} 串）" else "")
