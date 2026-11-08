@@ -464,20 +464,32 @@ header?.let { addRow(it, isHeader = true) }
         val rows = buildList {
             val base = profile?.identityRows() ?: d.deviceIdentity()
             val probeIdx = base.indexOfFirst { it[0] == "温度探头" }
+            // ⭐ 循环次数**单独一行**，位置在「电池类型」上面（用户 2026-11-09）。
+            //    SOC 与剩余容量合并成另一行（见下方动态区）。
+            val cycleRow = listOf("循环次数", "%d 次".format(d.cycleCount))
+            val battIdx = base.indexOfFirst { it[0] == "电池类型" }
             base.forEachIndexed { i, row ->
+                if (i == battIdx) add(cycleRow)
                 add(row)
+            }
+            if (battIdx < 0) add(cycleRow)
+            base.forEachIndexed { i, row ->
                 if (i == probeIdx && tempText.isNotBlank()) add(listOf("温度", tempText))
             }
-            // ⭐ 总压 / 电流 / 功率合一行（用户 2026-11-09）
+            // ⭐ 电压 / 电流 / 功率合一行；行名不再是"总压"（里面不止电压）
             add(
                 listOf(
-                    "总压",
+                    "电压/电流/功率",
                     "%.2fV / %.2fA / %.0fW".format(d.totalVoltage, d.totalCurrent, d.power)
                 )
             )
-            add(listOf("SOC", "${d.soc.toInt()} %"))
-            add(listOf("剩余容量", "%.2f Ah / %.2f Ah".format(d.remainingCapacity, d.ratedCapacity)))
-            add(listOf("循环", "${d.cycleCount} 次"))
+            // ⭐ SOC 与剩余容量合并一行（额定容量另有独立行，这里只放当前剩余值）
+            add(
+                listOf(
+                    "SOC",
+                    "%d %% / %.2f Ah".format(d.soc.toInt(), d.remainingCapacity)
+                )
+            )
             add(
                 listOf(
                     "均衡状态",
