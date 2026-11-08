@@ -33,4 +33,14 @@ class DeviceCachePrefs(context: Context) {
     var deviceProfileRaw: String
         get() = sp.getString("device_profile", "") ?: ""
         set(value) = sp.edit { putString("device_profile", value) }
+
+    /**
+     * 电池实况快照（`BatterySnapshot.encode()`）。
+     *
+     * 断开保护板后诊断面板的「电池实况」用它兜底 —— 用户要求
+     * 「断开 BMS 电池信息不能丢」，且必须**跨 APP 重启**有效。
+     */
+    var batterySnapshotRaw: String
+        get() = sp.getString("battery_snapshot", "") ?: ""
+        set(value) = sp.edit { putString("battery_snapshot", value) }
 }

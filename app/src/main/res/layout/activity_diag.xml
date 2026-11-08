@@ -33,12 +33,6 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <TextView
-                        style="@style/CardTitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/setting_connection" />
-
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_diag_auto_connect"
                         android:layout_width="match_parent"
@@ -72,21 +66,30 @@
                         android:layout_height="wrap_content"
                         android:text="@string/bms_alarm_title" />
 
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_diag_vibrate"
+                    <!-- 两个开关**并排一行**（用户要求）：各占一半宽度，
+                         开关控件固定在各自右侧 -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="@string/bms_alarm_vibrate"
-                        android:textSize="14sp" />
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_diag_dialog"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/bms_alarm_dialog"
-                        android:textSize="14sp" />
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switch_diag_vibrate"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/bms_alarm_vibrate"
+                            android:textSize="14sp" />
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switch_diag_dialog"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/bms_alarm_dialog"
+                            android:textSize="14sp" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -136,15 +139,6 @@ android:text="保护板信息" />
                 <TextView
                     style="@style/DiagText"
                     android:id="@+id/tv_range_breakdown" />
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- ③ 移动判定 -->
-            <com.google.android.material.card.MaterialCardView
-                style="@style/DiagCard">
-
-                <TextView
-                    style="@style/DiagText"
-                    android:id="@+id/tv_move_gate" />
             </com.google.android.material.card.MaterialCardView>
 
             <!-- ④ 派生指标 -->

@@ -61,16 +61,11 @@ class DiagActivity : AppCompatActivity() {
     }
 
     private val repo by lazy { YybmsAppHolder.from(this).monitorRepository }
+    private val app by lazy { YybmsAppHolder.from(this) }
 
-    /**
-     * ⭐ **最后一次有效数据**：断开保护板后电池信息不能变空
-     * （用户 2026-11-08 要求「保持最后一次读取数据」）。
-     *
-     * 只影响「电池实况」这一块的展示，不动 `_realtime` ——
-     * 否则里程/耗能会继续用旧数据积分。
-     */
-    private var lastGood: BmsRealtimeData? = null
-    private var lastGoodAtMs = 0L
+    // ⚠️ 「最后一次有效数据」不放这里：诊断面板每次打开都是新 Activity 实例，
+    //    自己的字段一重建就没了（用户实测「断开后再进来电池信息全空」）。
+    //    快照改由 Application 持有，见 [io.github.supit.rideassist.YybmsApp.lastRealtime]。
 
     private val ui = Handler(Looper.getMainLooper())
 
@@ -133,13 +128,16 @@ class DiagActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 repo.realtime.collect { d ->
-                    if (d.hasDeviceData) {
-                        lastGood = d
-                        lastGoodAtMs = System.currentTimeMillis()
-                    }
-                    // 断开时用最后一次数据顶上，并标注是"已断开的旧数据"
-                    val shown = if (d.hasDeviceData) d else lastGood ?: d
-                    renderDevice(shown, live = d.hasDeviceData)
+                    // 断开时优先用**本地磁盘快照**（跨 APP 重启也有效），
+                    // 没有再退回 Application 里的内存快照
+                    val snap = if (d.hasDeviceData) null
+                    else io.github.supit.rideassist.data.prefs.BatterySnapshotStore
+                        .load(app.deviceCache)
+                    val shown = if (d.hasDeviceData) d
+                    else snap?.toDisplayData() ?: app.lastRealtime
+                    val stamp = if (d.hasDeviceData) 0L
+                    else snap?.savedAtMs ?: app.lastRealtimeAtMs
+                    renderDevice(shown, live = d.hasDeviceData, savedAtMs = stamp)
                     renderAlarms(d)
                 }
             }
@@ -190,7 +188,6 @@ class DiagActivity : AppCompatActivity() {
         }
 
         // ---------- ③ 移动判定 ----------
-        renderGate(s)
 
         // ---------- ④ 派生指标 ----------
         // ⚠️ 原来的「压差趋势斜率」已删除（用户 2026-11-08：「根本没用」）：
@@ -205,21 +202,6 @@ class DiagActivity : AppCompatActivity() {
                 appendLine("　　　　　　 （已跟踪 SOC 跨度 ${fmt(s.socSpanTracked.toDouble(), 1)}%，")
                 appendLine("　　　　　　　　需满 ${SessionSpeedTracker.MIN_SOC_SPAN_FOR_CAPACITY.toInt()}%）")
             }
-        }
-    }
-
-    /**
-     * ③ 移动判定区 —— 显示三路证据与命中结果。
-     *
-     * ⚠️ 没有实时数据时也显示，用 `MoveGate.evaluate` 传入的最近值不可靠，
-     * 所以这里只在 `hasDeviceData` 时给出结论，否则显式写「未连接」。
-     */
-    private fun renderGate(s: SessionSpeedTracker.DebugSnapshot) {
-        b.tvMoveGate.text = buildString {
-            appendLine("三路证据（任一成立即在动）")
-            appendLine("　电流 %.2f A　阈值 ≥ %.1f A".format(0f, MoveGate.TH_CURRENT_A))
-            appendLine("　功率 %.0f W　阈值 ≥ %.0f W".format(0f, MoveGate.TH_POWER_W))
-            appendLine("　速度 %.1f km/h　阈值 ≥ %.0f km/h".format(0f, MoveGate.TH_SPEED_KMH))
         }
     }
 
@@ -283,6 +265,7 @@ class DiagActivity : AppCompatActivity() {
             rows = if (d.hasDeviceData) d.deviceIdentity()
             else profile?.identityRows() ?: emptyList(),
             numericFrom = 1,
+            centerValues = true,
         )
 
         // 均衡参数：只有真的有值才建区块，否则整块不显示
@@ -322,7 +305,9 @@ class DiagActivity : AppCompatActivity() {
         container: LinearLayout,
         header: List<String>?,
         rows: List<List<String>>,
-    numericFrom: Int = Int.MAX_VALUE,
+        numericFrom: Int = Int.MAX_VALUE,
+        /** 数值列是否居中（默认右对齐；保护板信息这类字符串值居中更好看） */
+        centerValues: Boolean = false,
     ) {
         container.removeAllViews()
         if (rows.isEmpty() && header == null) return
@@ -359,8 +344,11 @@ fun addRow(cells: List<String>, isHeader: Boolean) {
    val tv = TextView(this).apply {
          setTextAppearance(R.style.DiagCell)
      text = cell
-            gravity = if (c >= numericFrom) android.view.Gravity.END
-         else android.view.Gravity.START
+            gravity = when {
+                c < numericFrom -> android.view.Gravity.START
+                centerValues -> android.view.Gravity.CENTER
+                else -> android.view.Gravity.END
+            }
   if (isHeader) alpha = 0.85f
     // ⭐ 数值列固定宽度 + 不换行 —— 列位由此保证，不会因内容长度而漂移
          if (c >= numericFrom) {
@@ -431,14 +419,16 @@ header?.let { addRow(it, isHeader = true) }
     }
 
     private fun refreshSavedDevice(prefs: io.github.supit.rideassist.data.prefs.AppPrefs) {
+        // ⭐ 设备名与 MAC 放**同一行**（用户要求）：中间用两个空格隔开，
+        //    不再分两行占高度
         b.tvDiagSavedDevice.text = if (prefs.hasSavedDevice) {
-            "${prefs.lastDeviceName ?: "未知设备"}\n${prefs.lastDeviceMac}"
+            "${prefs.lastDeviceName ?: "未知设备"}  ${prefs.lastDeviceMac}"
         } else {
             getString(R.string.no_saved_device)
         }
     }
 
-    private fun renderDevice(d: BmsRealtimeData, live: Boolean) {
+    private fun renderDevice(d: BmsRealtimeData, live: Boolean, savedAtMs: Long = 0L) {
         b.tvDevice.text = buildString {
             appendLine("电池　${d.batteryTypeName} / ${d.cellCount} 串" +
                 if (d.maxCellNumSupported > 0) "（最大支持 ${d.maxCellNumSupported} 串）" else "")
@@ -458,24 +448,11 @@ header?.let { addRow(it, isHeader = true) }
             )
             appendLine("温度　${if (temps.isEmpty()) "无探头" else temps.joinToString("  ")}")
             appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
-            if (!live && lastGood != null) {
+            if (!live && savedAtMs > 0L) {
                 append("\n（保护板已断开，以上为 ")
-                append(clockOf(lastGoodAtMs))
+                append(clockOf(savedAtMs))
                 append(" 最后一次读到的数据）")
             }
-        }
-        // 有数据时把门控区的实时值填上
-        val verdict = MoveGate.evaluate(d, null)
-        b.tvMoveGate.text = buildString {
-            appendLine("三路证据（任一成立即在动）")
-            appendLine("　电流 %.2f A　阈值 ≥ %.1f A".format(verdict.absCurrent, MoveGate.TH_CURRENT_A))
-            appendLine("　功率 %.0f W　阈值 ≥ %.0f W".format(verdict.power, MoveGate.TH_POWER_W))
-            appendLine("　速度 无信号（GPS 不可用）")
-            appendLine()
-            appendLine("判定　${if (verdict.moving) "在动" else "静止"}" +
-                (verdict.reason?.let { "（$it）" } ?: "（三路证据均不满足）"))
-            appendLine()
-            appendLine("⚠ 功率与速度阈值为量纲估算，未实机标定")
         }
     }
 

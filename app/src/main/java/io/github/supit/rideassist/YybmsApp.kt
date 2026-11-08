@@ -74,6 +74,23 @@ class YybmsApp : Application() {
         io.github.supit.rideassist.core.ble.tpms.TpmsMonitor(this, appScope, prefs)
     }
 
+    /**
+     * ⭐⭐ **最后一次有效的实时数据**（跨页面存活）。
+     *
+     * 诊断面板断开保护板后还要显示"最后一次读到的电池信息"，
+     * 但那个 Activity 每次打开都是新实例，自己的字段兜不住 ——
+     * 所以把快照放在 Application 级（这里）。
+     */
+    @Volatile
+    var lastRealtime: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData =
+        io.github.supit.rideassist.core.protocol.model.BmsRealtimeData()
+        private set
+
+    /** 上面那次数据的时刻（墙钟 ms） */
+    @Volatile
+    var lastRealtimeAtMs: Long = 0L
+        private set
+
     /** ⭐ 本应用是否处于前台（悬浮窗显隐跟随用，ActivityLifecycleCallbacks 计数） */
     var isSelfForeground: Boolean = false
         private set
@@ -114,6 +131,11 @@ class YybmsApp : Application() {
                 // ⭐⭐ **电流证据的唯一喂数点**，必须放在 hasDeviceData 判断之前：
                 //    断连帧不刷新也不清零，交给宽限期自然过期 → 速度锁 0，
                 //    正是用户要求的「电流一直是 0，速度保持为 0」。
+                // 保住最后一次有效数据（诊断面板断开后仍能显示电池信息）
+                if (d.hasDeviceData) {
+                    lastRealtime = d
+                    lastRealtimeAtMs = System.currentTimeMillis()
+                }
                 tracker.noteCurrentEvidence(abs(d.totalCurrent), d.hasDeviceData)
                 if (!d.hasDeviceData) return@collect   // 断连帧不采样（沿用旧口径）
                 // 判据只有 MoveGate 一处，速度证据取 tracker 里的最新 GPS 值

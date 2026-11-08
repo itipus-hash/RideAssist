@@ -363,8 +363,8 @@
     <string name="tpms_threshold_invalid">请输入 %1$s ~ %2$s 之间的数值</string>
     <!-- 诊断面板内的连接/BMS 报警设置（自设置页迁入） -->
     <string name="bms_alarm_title">BMS 报警</string>
-    <string name="bms_alarm_vibrate">BMS 报警震动</string>
-    <string name="bms_alarm_dialog">BMS 报警弹窗</string>
+    <string name="bms_alarm_vibrate">震动提醒</string>
+    <string name="bms_alarm_dialog">弹窗提醒</string>
     <string name="tpms_bound_section">已绑定传感器</string>
     <string name="tpms_bound_section_desc">绑定/解绑在首页胎压卡长按操作</string>
     <string name="tpms_info_sn_fmt">SN %1$s</string>

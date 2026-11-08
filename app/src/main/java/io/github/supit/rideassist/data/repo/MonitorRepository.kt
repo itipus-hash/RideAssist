@@ -104,6 +104,12 @@ class MonitorRepository(
                     }
                 }
 
+                // ⭐ 电池实况快照（断开保护板后诊断面板还要显示最后一次记录）
+                if (parsed.hasDeviceData) {
+                    io.github.supit.rideassist.data.prefs.BatterySnapshotStore
+                        .saveThrottled(cache, parsed, System.currentTimeMillis())
+                }
+
                 // ⭐⭐ 本会话还没读到 0xA0 帧 → 用**本地缓存**兜底。
                 //    这是「充电结束后连上就误报单体过压」的正解：
                 //    连上头一两秒也有阈值可以做物理判定，
