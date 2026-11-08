@@ -216,21 +216,21 @@ class DiagActivity : AppCompatActivity() {
  numericFrom = 1,
       )
         val eff = d.effectiveAlarms()
-        // ⭐ 阈值来源必须写出来（用户要求阈值固化到本地后能分辨来源）：
-        // 没读到 → 明确说"未判定"，而不是让表格里一片 "-" 看着像正常
+        // ⭐ 告警结论在前，阈值来源标注放**最后一行**、且不带「阈值来源：」前缀
+        //    （用户 2026-11-09）。没读到阈值 → 明确说"未判定"，
+        //    而不是让表格里一片 "-" 看着像正常。
         b.tvAlarms.text = buildString {
-            append("阈值来源：")
+            append(
+                if (eff.isEmpty()) "生效告警：无"
+                else "生效告警：" + eff.joinToString("  ") { it.label }
+            )
+            append("\n")
             append(
                 when {
                     !d.hasProtectParams -> "未读到（电压 / 电流 / 温度类未判定）"
                     d.protectParamsFromCache -> savedAtText(d.protectParamsSavedAtMs)
                     else -> "本次从保护板读到的"
                 }
-            )
-            append("\n")
-            append(
-                if (eff.isEmpty()) "生效告警：无"
-                else "生效告警：" + eff.joinToString("  ") { it.label }
             )
         }
 
