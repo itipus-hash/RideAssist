@@ -200,6 +200,16 @@ class AppPrefs(context: Context) {
         get() = sp.getInt("overlay_size_space", 1)
         set(value) = sp.edit { putInt("overlay_size_space", value) }
 
+    /**
+     * ⭐ 追加的空格占位（编号 2 起）：开关与高度档位按编号派生 key。
+     * 不为每个占位手抄一对字段 —— 注册表里加一条即可，不会再漏字段。
+     * **默认不启用**（false）；字号默认「中」。
+     */
+    fun extraSpaceShow(n: Int): Boolean = sp.getBoolean("overlay_show_space_$n", false)
+    fun setExtraSpaceShow(n: Int, v: Boolean) = sp.edit { putBoolean("overlay_show_space_$n", v) }
+    fun extraSpaceSize(n: Int): Int = sp.getInt("overlay_size_space_$n", 1)
+    fun setExtraSpaceSize(n: Int, v: Int) = sp.edit { putInt("overlay_size_space_$n", v) }
+
     /** ⭐ 悬浮项目成对重排的一次性标记 */
     var pairResetDone: Boolean
         get() = sp.getBoolean("overlay_pair_reset_done", false)

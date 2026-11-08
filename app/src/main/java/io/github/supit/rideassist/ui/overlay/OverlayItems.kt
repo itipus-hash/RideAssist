@@ -18,6 +18,8 @@ object OverlayItems {
         val setShow: (AppPrefs, Boolean) -> Unit,
         val getSize: (AppPrefs) -> Int,
         val setSize: (AppPrefs, Int) -> Unit,
+        /** ⭐ 空白占位行：不填任何数据、恒为一条空白。判据只在注册表这一处 */
+        val isSpace: Boolean = false,
     )
 
     val ALL = listOf(
@@ -71,10 +73,30 @@ object OverlayItems {
             { it.overlaySizeDiffMax }, { p, v -> p.overlaySizeDiffMax = v }),
         // ⭐ 空白占位：开启后悬浮框多一条空白行，用来把信息分组隔开。
         //    字号档位在这里复用为「空白行高度」，不显示任何文字。
+        //    ⭐ 连同原有的共 **4 个**空格占位；追加的 3 个一律排在最后、
+        //    **默认不启用**（extraSpaceShow 默认 false），用户想隔几行就自己开几个。
+        //    未写进 overlayOrder 的新项由 ordered() 按注册顺序补在尾部，
+        //    老用户的排序不会被打乱。
         Def("space", R.string.overlay_item_space,
             R.string.overlay_display_space,
             { it.overlayShowSpace }, { p, v -> p.overlayShowSpace = v },
-            { it.overlaySizeSpace }, { p, v -> p.overlaySizeSpace = v }),
+            { it.overlaySizeSpace }, { p, v -> p.overlaySizeSpace = v },
+            isSpace = true),
+        Def("space2", R.string.overlay_item_space_2,
+            R.string.overlay_display_space,
+            { it.extraSpaceShow(2) }, { p, v -> p.setExtraSpaceShow(2, v) },
+            { it.extraSpaceSize(2) }, { p, v -> p.setExtraSpaceSize(2, v) },
+            isSpace = true),
+        Def("space3", R.string.overlay_item_space_3,
+            R.string.overlay_display_space,
+            { it.extraSpaceShow(3) }, { p, v -> p.setExtraSpaceShow(3, v) },
+            { it.extraSpaceSize(3) }, { p, v -> p.setExtraSpaceSize(3, v) },
+            isSpace = true),
+        Def("space4", R.string.overlay_item_space_4,
+            R.string.overlay_display_space,
+            { it.extraSpaceShow(4) }, { p, v -> p.setExtraSpaceShow(4, v) },
+            { it.extraSpaceSize(4) }, { p, v -> p.setExtraSpaceSize(4, v) },
+            isSpace = true),
     )
 
     /** 按 prefs 里的排序串返回有序项目（未入列的按注册顺序补在尾部） */

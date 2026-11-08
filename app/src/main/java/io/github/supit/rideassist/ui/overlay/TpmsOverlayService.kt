@@ -144,8 +144,12 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         @Volatile
         var textColorListener: ((Int) -> Unit)? = null
 
-        /** ⭐ 空白占位项目 key（渲染时跳过数据填充） */
-        const val KEY_SPACE = "space"
+        /**
+         * ⭐ 空白占位项目 key：**从注册表派生**，不在服务里手抄一份清单。
+         * 新增占位只需在 OverlayItems.ALL 里加一条 isSpace=true 的 Def。
+         */
+        val SPACE_KEYS: Set<String> =
+            OverlayItems.ALL.filter { it.isSpace }.map { it.key }.toSet()
 
         /** ⭐ 本 APP 切到导航软件后的预期状态（此期间长按悬浮窗不隐藏） */
         @Volatile
@@ -242,7 +246,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
         // 每个项目一行（创建一次，排序时重排）
         OverlayItems.ALL.forEach { def ->
             rowViews[def.key] = TextView(this).apply {
-                if (def.key == KEY_SPACE) text = " "
+                if (def.isSpace) text = " "
                 textSize = 15f
                 setTextColor(themeTextColor)
             }
@@ -375,7 +379,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
             (tv.parent as? ViewGroup)?.removeView(tv)
             tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)].toFloat()
             tv.visibility = View.VISIBLE
-            if (def.key == KEY_SPACE) {
+            if (def.isSpace) {
                 // 空白占位：不含任何文字/单位；字号档位复用为留白高度
                 tv.text = " "
                 tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)] * 0.6f
@@ -465,10 +469,13 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
     // ==================== 渲染 ====================
 
     private fun renderAll() {
-        // ⭐ 空白占位行恒为一条空白，任何数据渲染都不碰它
-        rowViews[KEY_SPACE]?.let { tv ->
-            tv.text = " "
-            tv.visibility = View.VISIBLE
+        // ⭐ 所有空白占位行恒为纯空白，任何数据渲染都不碰它们
+        //    （由注册表派生，新增占位自动纳入，不用改这里）
+        SPACE_KEYS.forEach { key ->
+            rowViews[key]?.let { tv ->
+                tv.text = " "
+                tv.visibility = View.VISIBLE
+            }
         }
         renderTpmsFront(latestTpms)
         renderTpmsRear(latestTpms)

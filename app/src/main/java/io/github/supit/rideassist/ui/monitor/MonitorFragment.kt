@@ -307,15 +307,26 @@ class MonitorFragment : Fragment() {
                 container.addView(col)
             }
         }
-        // 只更新数值（不重建视图，长按/弹窗期间也不会被打断）
+        // ⭐⭐ **除 MOS 外的探头按数值去重**：读数一样只留第一个槽位，
+        //    不一样才显示成两个。判据只在 [TempSlotDedup] 一处（纯 JVM 可测），
+        //    这里只负责把协议值格式化成显示值再交给它。
+        val display = (0 until count).map { i ->
+            slots[i].value?.let { getString(R.string.format_temp, it) }
+        }
+        val duplicate = io.github.supit.rideassist.util.TempSlotDedup.hiddenIndices(display)
+
+        // ⭐⭐ 只改 visibility，**不重建视图** —— 合并/拆分若走 removeAllViews，
+        //    温度跳变时视图会被换掉，长按改名又变回「按不住」的老问题。
+        //    这里槽位是水平 weight=1 等分，GONE 让剩余槽位重新均分（真正合并），
+        //    且其它槽位仍在，不会像垂直标题行那样塌陷行高。
         val abnormal = ContextCompat.getColor(requireContext(), R.color.abnormal)
         val normal = ContextCompat.getColor(requireContext(), R.color.text_primary)
         for (i in 0 until count) {
-            val valueView = tempSlotCols.getOrNull(i)
-                ?.findViewById<android.widget.TextView>(R.id.tv_temp_slot_value) ?: continue
+            val col = tempSlotCols.getOrNull(i) ?: continue
+            col.visibility = if (duplicate[i]) View.GONE else View.VISIBLE
+            val valueView = col.findViewById<android.widget.TextView>(R.id.tv_temp_slot_value)
             val v = slots[i].value
-            valueView.text = v?.let { getString(R.string.format_temp, it) }
-                ?: getString(R.string.temp_none)
+            valueView.text = display[i] ?: getString(R.string.temp_none)
             valueView.setTextColor(
                 if (v != null && (v > 60f || v < -10f)) abnormal else normal
             )

@@ -171,6 +171,10 @@
     <string name="overlay_item_mos_temp">MOS温度</string>
     <string name="overlay_item_space">空格占位</string>
     <string name="overlay_display_space">空格占位</string>
+    <!-- ⭐ 追加的 3 个空格占位（连同原有的共 4 个）：默认全关，编号只用于区分设置页开关 -->
+    <string name="overlay_item_space_2">空格占位 2</string>
+    <string name="overlay_item_space_3">空格占位 3</string>
+    <string name="overlay_item_space_4">空格占位 4</string>
     <string name="overlay_open_nav">打开导航软件</string>
     <string name="overlay_quick_nav">+快捷导航</string>
     <string name="quick_nav_value_hint">地点 / 坐标 / 链接（可选）</string>
