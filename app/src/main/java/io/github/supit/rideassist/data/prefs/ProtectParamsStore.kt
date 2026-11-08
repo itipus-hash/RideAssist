@@ -12,8 +12,8 @@ import io.github.supit.rideassist.core.protocol.model.ProtectThresholds
 object ProtectParamsStore {
 
     /** 读出本地缓存的阈值；没有或格式不合法时返回 null */
-    fun load(prefs: AppPrefs): ProtectThresholds? =
-        ProtectThresholds.decode(prefs.protectParamsRaw)
+    fun load(cache: DeviceCachePrefs): ProtectThresholds? =
+        ProtectThresholds.decode(cache.protectParamsRaw)
 
     /**
      * 与本地缓存比较，**只有阈值真的变化了才写盘**。
@@ -24,10 +24,10 @@ object ProtectParamsStore {
      *
      * @return true = 确实写入了新阈值
      */
-    fun saveIfChanged(prefs: AppPrefs, thresholds: ProtectThresholds): Boolean {
-        val cached = load(prefs)
+    fun saveIfChanged(cache: DeviceCachePrefs, thresholds: ProtectThresholds): Boolean {
+        val cached = load(cache)
         if (cached != null && !thresholds.differsFrom(cached)) return false
-        prefs.protectParamsRaw = thresholds.encode()
+        cache.protectParamsRaw = thresholds.encode()
         return true
     }
 }

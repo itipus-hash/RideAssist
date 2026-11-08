@@ -6,7 +6,8 @@ import io.github.supit.rideassist.core.protocol.YybmsCommand
 import io.github.supit.rideassist.core.protocol.YybmsPayloadParser
 import io.github.supit.rideassist.core.protocol.model.BmsRealtimeData
 import io.github.supit.rideassist.core.protocol.model.ProtectThresholds
-import io.github.supit.rideassist.data.prefs.AppPrefs
+import io.github.supit.rideassist.data.prefs.DeviceCachePrefs
+import io.github.supit.rideassist.data.prefs.DeviceProfileStore
 import io.github.supit.rideassist.data.prefs.ProtectParamsStore
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -29,8 +30,8 @@ import kotlinx.coroutines.launch
 class MonitorRepository(
     private val bleManager: BleManager,
     private val scope: CoroutineScope,
-    /** 保护板阈值的本地缓存读写（见 [ProtectParamsStore]） */
-    private val prefs: AppPrefs,
+    /** 设备缓存（保护板阈值 / 设备信息），独立 SharedPreferences 文件 */
+    private val cache: DeviceCachePrefs,
 ) {
 
     companion object {
@@ -96,8 +97,19 @@ class MonitorRepository(
                     YybmsCommand.fromResponseLength(frame.size) == YybmsCommand.READ_PROTECT_PARAM
                 ) {
                     val fresh = ProtectThresholds.of(parsed, System.currentTimeMillis())
-                    if (ProtectParamsStore.saveIfChanged(prefs, fresh)) {
+                    if (ProtectParamsStore.saveIfChanged(cache, fresh)) {
                         Log.i(TAG, "保护参数已更新到本地缓存")
+                    }
+                }
+
+                // ⭐⭐ 设备信息 / 电池信息也缓存；**型号变化 → 换板子 → 作废旧阈值缓存**
+                if (parsed.productName.isNotBlank() && parsed.productName != previous.productName) {
+                    if (DeviceProfileStore.syncOrInvalidate(cache, parsed, System.currentTimeMillis())) {
+                        Log.w(
+                            TAG,
+                            "检测到换了保护板（型号${previous.productName} → ${parsed.productName}），" +
+                                "已作废旧阈值缓存，等待重新读取"
+                        )
                     }
                 }
 
@@ -108,7 +120,7 @@ class MonitorRepository(
                 val merged = if (parsed.hasProtectParams) {
                     parsed
                 } else {
-                    ProtectParamsStore.load(prefs)?.applyTo(parsed) ?: parsed
+                    ProtectParamsStore.load(cache)?.applyTo(parsed) ?: parsed
                 }
 
                 _realtime.value = merged

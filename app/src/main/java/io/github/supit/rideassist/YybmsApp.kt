@@ -27,6 +27,17 @@ class YybmsApp : Application() {
     val prefs: AppPrefs by lazy { AppPrefs(this) }
 
     /**
+     * ⭐⭐ **设备缓存**（保护板阈值 / 设备信息 / 电池信息）。
+     *
+     * 刻意用**独立的 SharedPreferences 文件**（`device_cache`）：
+     * 用户点「清空本次会话」或将来任何 `AppPrefs.clear()` 都不会波及它。
+     * 放同一个文件里只是"少写一个文件"，代价是缓存会被顺手清掉。
+     */
+    val deviceCache: io.github.supit.rideassist.data.prefs.DeviceCachePrefs by lazy {
+        io.github.supit.rideassist.data.prefs.DeviceCachePrefs(this)
+    }
+
+    /**
      * ⚠️ 声明顺序有依赖：`bleScanner` 必须在 `bleManager` **之前**，
      * 因为 BleManager 要注入它做「扫描/连接互斥」——
      * BLE 扫描占用射频，会让 GATT 连接必然失败（实测 status=8 超时）。
@@ -36,8 +47,8 @@ class YybmsApp : Application() {
     val bleManager: BleManager by lazy { BleManager(this, appScope, bleScanner) }
 
     val monitorRepository: MonitorRepository by lazy {
-        // prefs 用于保护板阈值的本地缓存（连上保护板前就能做物理判定）
-        MonitorRepository(bleManager, appScope, prefs)
+        // deviceCache 是独立文件的设备缓存（阈值 / 设备信息）
+        MonitorRepository(bleManager, appScope, deviceCache)
     }
 
     /**

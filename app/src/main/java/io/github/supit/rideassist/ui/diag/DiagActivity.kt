@@ -103,8 +103,14 @@ class DiagActivity : AppCompatActivity() {
                 .setTitle(R.string.diag_reset_title)
                 .setMessage(R.string.diag_reset_msg)
                 .setPositiveButton(R.string.confirm) { _, _ ->
+                    // ⭐ 只清会话内存。本地阈值 / 设备信息在独立的 device_cache 文件里，
+                    //    不会被这个按钮波及（用户 2026-11-08 明确要求）
                     tracker.resetSession()
-                    Toast.makeText(this, R.string.diag_reset_done, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this,
+                        getString(R.string.diag_reset_done) + "（本地阈值 / 设备缓存保留）",
+                        Toast.LENGTH_SHORT
+                    ).show()
                     render()
                 }
                 .setNegativeButton(R.string.cancel, null)
@@ -177,16 +183,10 @@ class DiagActivity : AppCompatActivity() {
         renderGate(s)
 
         // ---------- ④ 派生指标 ----------
+        // ⚠️ 原来的「压差趋势斜率」已删除（用户 2026-11-08：「根本没用」）：
+        // 它以 mV/min 做线性回归，压差本身在 4~8mV 量级抖动，斜率几乎全是噪声，
+        // 既不能指导判断也占版面。
         b.tvDerived.text = buildString {
-            val trend = s.diffTrendMvPerMin
-            val trendTxt = when {
-                s.diffPoints < 3 -> "样本不足（${s.diffPoints} 点）"
-                kotlin.math.abs(trend) < 0.5f -> "%.2f mV/min（基本持平）".format(trend)
-                trend > 0 -> "%.2f mV/min（⚠ 压差在扩大）".format(trend)
-                else -> "%.2f mV/min（正在收敛）".format(trend)
-            }
-            appendLine("压差趋势斜率　$trendTxt")
-
             if (s.measuredCapacityAh > 0f) {
                 appendLine("实测有效容量　${fmt(s.measuredCapacityAh.toDouble(), 2)} Ah")
                 appendLine("实测 SOH　　　${fmt(s.measuredSoh.toDouble(), 1)} %")
@@ -220,7 +220,7 @@ class DiagActivity : AppCompatActivity() {
         // 之前这里 `!hasDeviceData` 就整块 return 成「未连接设备」，
         // 于是缓存阈值根本没机会展示 —— 等于阈值仍然要等保护板。
         val cached = io.github.supit.rideassist.data.prefs.ProtectParamsStore
-            .load(YybmsAppHolder.from(this).prefs)
+            .load(YybmsAppHolder.from(this).deviceCache)
         val d = if (!raw.hasProtectParams && cached != null) cached.applyTo(raw) else raw
 
         if (!d.hasDeviceData) {
@@ -260,12 +260,21 @@ class DiagActivity : AppCompatActivity() {
             )
         }
 
-fillTable(b.llIdentity, header = null, rows = d.deviceIdentity(), numericFrom = Int.MAX_VALUE)
+        // ⭐ 设备信息 / 电池信息也走本地缓存：没连保护板时显示上次读到的型号、
+        // 版本、SN、电池类型、串数、额定容量、标称总压
+        val profile = io.github.supit.rideassist.data.prefs.DeviceProfileStore
+            .load(YybmsAppHolder.from(this).deviceCache)
+        fillTable(
+            b.llIdentity, header = null,
+            rows = if (d.hasDeviceData) d.deviceIdentity()
+            else profile?.identityRows() ?: emptyList(),
+            numericFrom = Int.MAX_VALUE,
+        )
 
         // 保护参数：区块标题 + 隐形表格
         b.llAnchors.removeAllViews()
         b.llAnchors.addView(sectionTitle("保护参数"))
-fillTable(b.llAnchors, header = null, rows = d.protocolAnchors(), numericFrom = 1)
+        fillTable(b.llAnchors, header = null, rows = d.protocolAnchors(), numericFrom = 1)
     }
 
     /** ⭐ 温度探头独立性验证区块（T1/T2 是否两路独立探头） */

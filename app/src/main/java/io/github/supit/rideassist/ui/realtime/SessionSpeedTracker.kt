@@ -270,44 +270,6 @@ class SessionSpeedTracker : ViewModel() {
     val netEnergyWh: Double get() = energyWh - regenWh
 
     /**
-     * ⭐ **压差趋势斜率**（mV / 分钟）—— 对最近若干次压差采样做一元线性回归。
-     *
-     * ## 为什么看斜率而不是当前压差
-     * 压差从 5mV 涨到 30mV 是**衰减的早期信号**，等到绝对值超标已经晚了。
-     * 单次压差只是噪声，斜率才反映趋势。
-     *
-     * 返回 mV/min：正=压差在扩大（变差），负=在收敛（均衡生效/充放电均衡）。
-     * 样本不足（<3）时返回 0。
-     */
-    val diffTrendMvPerMin: Float
-        get() {
-            // ⚠️ ArrayDeque 不支持按下标随机访问，必须先转 List。
-            // 这里只在 getter 内转换（诊断面板每秒才读一次），代价可忽略。
-            val q = diffPoints.toList()
-            val n = q.size
-            if (n < 3) return 0f
-            // 取最近 60 个点（约 1 分钟 @1Hz）
-            val from = maxOf(0, n - 60)
-            val cnt = n - from
-            if (cnt < 3) return 0f
-            // 一元线性回归斜率： Σ(x-x̄)(y-ȳ) / Σ(x-x̄)²
-            val xMean = (from + n - 1) / 2.0
-            var sxy = 0.0
-            var sxx = 0.0
-            var yMean = 0.0
-            for (i in from until n) yMean += q[i]
-            yMean /= cnt
-            for (i in from until n) {
-                val dx = (i - xMean)
-                sxy += dx * (q[i] - yMean)
-                sxx += dx * dx
-            }
-            if (sxx <= 0.0) return 0f
-            // 每点间隔约 1 秒 → mV/point·(1000/60) = mV/min
-            return ((sxy / sxx) * 60.0).toFloat()
-        }
-
-    /**
      * ⭐⭐ **实测有效容量**（Ah）—— 用「SOC 下降了多少」反推真实可用容量。
      *
      * ## 目的：校验官方公式
@@ -532,7 +494,6 @@ class SessionSpeedTracker : ViewModel() {
             per100Km = per100,
             whPerKm = whPerKm,
             estimatedRangeKm = estimatedRangeKm,
-            diffTrendMvPerMin = diffTrendMvPerMin,
             measuredCapacityAh = measuredCapacityAh,
             measuredSoh = measuredSoh,
             socSpanTracked = socSpanTracked,
@@ -564,7 +525,6 @@ class SessionSpeedTracker : ViewModel() {
         val whPerKm: Float,
         val estimatedRangeKm: Float,
         // 派生指标
-        val diffTrendMvPerMin: Float,
         val measuredCapacityAh: Float,
         val measuredSoh: Float,
         val socSpanTracked: Float,
