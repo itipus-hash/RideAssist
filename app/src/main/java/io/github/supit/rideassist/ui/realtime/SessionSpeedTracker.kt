@@ -30,6 +30,24 @@ class SessionSpeedTracker : ViewModel() {
      * 实现：记录末次「有数据」的时刻，重启时若距今 <3 分钟则恢复旧值。
      */
     var maxSpeed: Int = 0
+        private set   // ⭐ 唯一写入口是 [noteSpeed]，禁止外部再直接赋值
+
+    private val _speedRevision = MutableStateFlow(0L)
+
+    /** 极速一刷新就通知悬浮窗重渲（退后台时悬浮窗没有别的刷新源） */
+    val speedRevisionFlow: StateFlow<Long> = _speedRevision.asStateFlow()
+
+    /**
+     * ⭐⭐ **会话极速的唯一写入口**。
+     * 实时页与悬浮前台服务两条 GPS 订阅都调它，口径由 SpeedDisplay.Filter 统一。
+     * @return true = 刷新了记录（触发订阅方重渲）
+     */
+    fun noteSpeed(shownKmh: Int): Boolean {
+        if (shownKmh <= maxSpeed) return false
+        maxSpeed = shownKmh
+        _speedRevision.update { it + 1 }
+        return true
+    }
 
     // ===== 曲线采样点（180 ≈ 3 分钟 @1Hz）=====
     // ⭐ 断连时不clear()，所以曲线保留断连前的走势，重连后继续接着画
@@ -809,9 +827,11 @@ class SessionSpeedTracker : ViewModel() {
         // ⚠️ last=0 说明从未记录过 → 清零
         if (last == 0L || elapsed >= MAX_KEEP_MS) {
             maxSpeed = 0
+            _speedRevision.update { it + 1 }   // ⭐ 清零也是一次变更，订阅方要跟着重渲
             return false
         }
         maxSpeed = saved
+        _speedRevision.update { it + 1 }
         return true
     }
 
@@ -970,6 +990,9 @@ class SessionSpeedTracker : ViewModel() {
         diffPoints.clear()
         java.util.Arrays.fill(peakRecords, null)
         _peakRevision.update { it + 1 }
+        // ⭐ maxSpeed 也归零了，必须通知订阅方（悬浮窗的「极速」），
+        //    否则清空会话后悬浮窗还挂着旧数字。
+        _speedRevision.update { it + 1 }
     }
 
     companion object {

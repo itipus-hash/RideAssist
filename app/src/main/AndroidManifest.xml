@@ -34,6 +34,8 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 悬浮前台服务要在退到后台时持续订阅 GPS 维持会话极速，Android 14+ 要求此权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <!-- ==================== 定位权限 ====================
          1) Android 11 及以下：BLE 扫描强制要求
@@ -92,7 +94,7 @@
             <service
             android:name=".ui.overlay.TpmsOverlayService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="location" />
             <receiver
             android:name=".core.update.UpdateApkReceiver"
             android:exported="false">

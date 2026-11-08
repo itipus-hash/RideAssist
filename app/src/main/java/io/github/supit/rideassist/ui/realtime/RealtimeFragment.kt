@@ -63,7 +63,8 @@ class RealtimeFragment : Fragment(), LocationListener {
     private var locationManager: LocationManager? = null
 
     /** GPS 速度低通滤波后的值（km/h） */
-    private var filteredSpeed: Float? = null
+    /** ⭐ 速度口径统一走 SpeedDisplay.Filter（与悬浮服务同源） */
+    private val speedFilter = io.github.supit.rideassist.util.SpeedDisplay.Filter()
 
     /** 本次 APP 会话的最高速度（km/h，整数显示）。
      *  存在 Activity 上，切页/重建/断连都不丢。 */
@@ -764,6 +765,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         b.tvSpeedNowUnit.text = ""
         // ⭐ 无GPS 数据源 = 没有速度信号 → 曲线不画（塞 0 会出现贴底横线）
         hasSpeedSignal = false
+        speedFilter.reset()
         tracker.liveSpeedKmh = null
         // 无条件调用，队列非空时它会清空并重绘
         pushSpeedSample(0)
@@ -875,16 +877,12 @@ class RealtimeFragment : Fragment(), LocationListener {
 
         val kmh = loc.speed * 3.6f
         hasSpeedSignal = true
-        // 指数低通：alpha 越小越平滑
-        filteredSpeed = if (filteredSpeed == null) kmh
-        else (filteredSpeed!! + (kmh - filteredSpeed!!) * SMOOTH_ALPHA)
+        // ⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径）
+        val shown = speedFilter.push(kmh)
         // ⭐ 把低通后的真实速度共享给应用级采集器（MoveGate 第三路证据）
-        tracker.liveSpeedKmh = filteredSpeed
-
-        val shown = if (filteredSpeed!! < SPEED_ZERO_THRESHOLD) 0 else filteredSpeed!!.toInt()
-
-        // 记录会话最高速度（用**显示值**而非原始值，保持与水印一致）
-        if (shown > tracker.maxSpeed) tracker.maxSpeed = shown
+        tracker.liveSpeedKmh = speedFilter.realSpeed
+        // ⭐ 会话极速的唯一写入口；悬浮窗靠 speedRevisionFlow 同步
+        tracker.noteSpeed(shown)
         applySpeedMax()
         renderSpeedColors(shown)
         pushSpeedSample(shown)
@@ -926,7 +924,7 @@ class RealtimeFragment : Fragment(), LocationListener {
             // 之前若已恢复了几次（抖动），此刻全部作废，从 0 重新数。
             gpsRecoverSpeedCount = 0
             // 丢失前的速度：优先用低通后的值，没有则用 0
-            val lastValid = filteredSpeed?.toInt() ?: 0
+            val lastValid = speedFilter.realSpeed?.toInt() ?: 0
             ensureLossEstimator().onGpsLost(lastValid.toFloat(), headingDegrees, now)
             // 启动每秒推进推算 + 刷新「已丢失 XX」
             gpsLostHandler.removeCallbacks(gpsLostTick)
@@ -970,7 +968,7 @@ class RealtimeFragment : Fragment(), LocationListener {
 
     /** 丢失前的速度（km/h，整数），至少为 0 */
     private fun lastValidSpeed(): Int =
-        (filteredSpeed?.toInt() ?: 0).coerceAtLeast(0)
+        (speedFilter.realSpeed?.toInt() ?: 0).coerceAtLeast(0)
 
     /** 取定位的方位角（度），无则 -1 */
     private fun headingOf(loc: Location): Float =
@@ -1247,7 +1245,7 @@ class RealtimeFragment : Fragment(), LocationListener {
      * @return 完整判定结果（含命中的证据），诊断面板要用
      */
     private fun judgeMoving(d: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData): MoveGate.Verdict =
-        MoveGate.evaluate(d, filteredSpeed)
+        MoveGate.evaluate(d, speedFilter.realSpeed)
 
     /**
      * 便捷包装：只要布尔结论的地方用它。
@@ -1317,7 +1315,7 @@ class RealtimeFragment : Fragment(), LocationListener {
                     tracker.noteDischarge(d.totalCurrent)
                     // ⭐ 速度峰值依赖本页 GPS，仍在这里比对；功率/电流/压差三项
                     //    已搬到 YybmsApp 的应用级采集器（退后台也不冻结）。
-                    updatePeakRecord(CARD_SPEED, filteredSpeed?.toInt()?.toFloat() ?: 0f, d)
+                    updatePeakRecord(CARD_SPEED, speedFilter.realSpeed?.toInt()?.toFloat() ?: 0f, d)
                     // 峰值被应用级采集器刷新时，本页也要跟着重绘记录卡
                     renderPeakRecordCard()
 
@@ -1329,7 +1327,7 @@ class RealtimeFragment : Fragment(), LocationListener {
                         // `shown` 做了「<5km/h 归零 + 取整」，用那种值积分里程
                         // 会**系统性低估**（爬坡/等红灯的真实速度被抹成 0）。
                         // Tracker 里用**逐段梯形积分**，不是「均速 × 时长」。
-                        speedKmhReal = filteredSpeed ?: 0f,
+                        speedKmhReal = speedFilter.realSpeed ?: 0f,
                         powerW = d.power,
                         amps = verdict.absCurrent,
                         moving = moving,
@@ -1600,14 +1598,9 @@ class RealtimeFragment : Fragment(), LocationListener {
          */
         private const val GPS_RECOVER_CONFIRM_COUNT = 3
 
-        private const val SPEED_ZERO_THRESHOLD = 5f
 
         /** 超过该速度（km/h）主数值与 Max 都转红色告警 */
         private const val SPEED_DANGER = 50
-
-        /** 低通滤波系数，越小越平滑（0.3 ≈ 轻微平滑） */
-        private const val SMOOTH_ALPHA = 0.3f
-
         // ===== 单位常量（与 strings.xml 保持一致）=====
         // ⚠️ 这些单位**只用于 Max/Min 统计文案**。
         // 水印上的单位是独立 TextView（字号更小），由布局静态提供，别拼进数值里。

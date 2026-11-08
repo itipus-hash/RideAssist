@@ -1,11 +1,19 @@
 package io.github.supit.rideassist.ui.overlay
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -13,6 +21,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import io.github.supit.rideassist.R
 import io.github.supit.rideassist.YybmsApp
 import io.github.supit.rideassist.core.ble.tpms.TpmsMonitor
@@ -31,12 +40,20 @@ import kotlinx.coroutines.launch
  * - **单击**（<500ms 未拖动）→ 返回本应用；**按住 ≥500ms 松开** → 关闭
  *
  * ## 行显隐（用户要求）
- * - **每个信息单独一行**，开关打开的项目恒定占一行；
- *   没数据也**不隐藏**（写「标签  --」），行数不跳动
+ * - **每个信息单独一行**，开关打开的项目恒定占一行；没数据也**不隐藏**
+ *   （整行写空白，不再是「标签  --」），行数不跳动
+ * - ⚠️ 唯一例外：前轮 / 后轮胎压**合并成一行**（两个开关仍独立、仍可排序）
  * - 「空格占位」项目 = 一条纯空白行
  * - 所有项目开关都关 → 整框隐藏
+ *
+ * ## 后台 GPS（2026-11 修复极速冻结）
+ * 实时页的 GPS 订阅挂在 Fragment 生命周期上，切到导航软件后 onPause 会
+ * `removeUpdates` → 会话极速从此冻结，悬浮窗「极速」永远停在切走那一刻。
+ * 与「Max压差」是同一类根因（喂数点层级低于数据持有者）。
+ * 前台服务在这里**独立订阅一路 GPS**，只喂 [SessionSpeedTracker.noteSpeed]，
+ * 不碰 UI 曲线 / GPS 丢失推算；低通口径复用 SpeedDisplay.Filter 保证两处一致。
  */
-class TpmsOverlayService : android.app.Service() {
+class TpmsOverlayService : android.app.Service(), LocationListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var windowManager: WindowManager? = null
@@ -60,6 +77,20 @@ class TpmsOverlayService : android.app.Service() {
 
     /** 字号档位 → sp（小/中/大；19:47 用户反馈各再大一点：18/22/26 → 22/26/30） */
     private val sizeSp = intArrayOf(22, 26, 30)
+
+    /**
+     * ⭐ 前/后轮胎压的合并行容器。
+     * 两个项目在注册表里仍是各自独立的开关与排序项，只在**渲染**时合并到这一行；
+     * 谁先出现由用户排序决定，两个都关时容器不进布局树。
+     */
+    private var tpmsPairRow: LinearLayout? = null
+
+    // ===== 后台 GPS：只负责维持会话极速，不做任何 UI 采样 =====
+
+    private var overlayLocationManager: LocationManager? = null
+
+    /** ⭐ 独立 Filter 实例：低通状态不能与实时页共享，但口径常量只有 SpeedDisplay 一处 */
+    private val overlaySpeedFilter = io.github.supit.rideassist.util.SpeedDisplay.Filter()
 
     /**
      * 是否夜间主题（用户要求按**实际时间**：18:00~06:00 夜间白字，
@@ -130,7 +161,22 @@ class TpmsOverlayService : android.app.Service() {
             .setOngoing(true)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MIN)
             .build()
-        startForeground(1001, notification)
+        // ⭐ 前台服务要在后台持续拿 GPS（维持会话极速），必须声明 location 类型，
+        //    否则 Android 14+ 会掐掉后台定位更新。
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            runCatching {
+                startForeground(
+                    1001, notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                )
+            }.onFailure {
+                // ⚠️ 用户没给定位权限时系统可能拒绝带 location 类型的 FGS。
+                //    降级成普通前台通知：悬浮窗还能显示，绝不因权限闪退。
+                runCatching { startForeground(1001, notification) }
+            }
+        } else {
+            startForeground(1001, notification)
+        }
         return START_STICKY
     }
 
@@ -268,27 +314,35 @@ class TpmsOverlayService : android.app.Service() {
         scope.launch {
             app.sessionTracker.peakRevisionFlow.collect { renderAll() }
         }
+        // ⭐⭐ 极速同理：破纪录的瞬间必须重渲，不能等下一帧 BMS 数据。
+        scope.launch {
+            app.sessionTracker.speedRevisionFlow.collect { renderAll() }
+        }
+        // ⭐⭐ 退后台后实时页会停 GPS，这里续上一路，会话极速不再冻结。
+        startOverlayGps()
     }
 
     /**
-     * 布局重建（开关/排序/字号变化时）：
-     * ⭐ **每个项目独占一行**（用户要求），行宽撑满、文字左对齐。
-     * 数据无效也保持这一行（写「标签  --」占位），行数恒定不跳动。
+     * 布局重建（开关/排序/字号变化时）。
+     *
+     * - ⭐ **每个项目独占一行**，文字左对齐；数据无效也保留这一行（写空白），
+     *   行数恒定不跳动。
+     * - ⭐ **唯一例外**：前 / 后轮胎压合并到同一水平行。两个开关与排序位置仍
+     *   各自独立，只是渲染时落到同一个 [tpmsPairRow] 里，谁在左由排序决定。
+     *   间隔用真实 margin 而不是补空格字符 —— 字体宽度不可靠（本项目踩过）。
      */
     private fun applyOrderAndVisibility() {
         val root = rootView ?: return
         val prefs = (application as YybmsApp).prefs
         root.removeAllViews()
+        tpmsPairRow?.removeAllViews()
         val shown = OverlayItems.ordered(prefs).filter { it.getShow(prefs) }
+        val gapPx = (14 * resources.displayMetrics.density).toInt()
+        var pairAdded = false
 
         shown.forEach { def ->
             val tv = rowViews[def.key] ?: return@forEach
             (tv.parent as? ViewGroup)?.removeView(tv)
-            // ⭐ WRAP_CONTENT：悬浮框宽度随内容走，绝不意外撑满整屏
-            tv.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
             tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)].toFloat()
             tv.visibility = View.VISIBLE
             if (def.key == KEY_SPACE) {
@@ -297,7 +351,38 @@ class TpmsOverlayService : android.app.Service() {
                 tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)] * 0.6f
                 tv.setTextColor(themeTextColor)
             }
-            root.addView(tv)
+
+            if (def.key == "tpmsf" || def.key == "tpmsr") {
+                // ⭐ 合并行：容器只在第一个胎压项出现时挂进 root 一次，
+                //    第二个胎压项直接追加为同行的第二个 child。
+                val row = tpmsPairRow ?: LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                }.also { tpmsPairRow = it }
+                if (!pairAdded) {
+                    root.addView(
+                        row,
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        )
+                    )
+                    pairAdded = true
+                }
+                val lp = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                // 只给「同一行里的第二个」加间隔；单开一个开关时行首不留白
+                if (row.childCount > 0) lp.marginStart = gapPx
+                row.addView(tv, lp)
+            } else {
+                // ⭐ WRAP_CONTENT：悬浮框宽度随内容走，绝不意外撑满整屏
+                tv.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                root.addView(tv)
+            }
         }
 
         // 空态占位行（放最后，现已恒隐：行都常驻，不再需要「等待数据…」）
@@ -343,7 +428,7 @@ class TpmsOverlayService : android.app.Service() {
             return
         }
         root.visibility = if (anySwitchOn) View.VISIBLE else View.INVISIBLE
-        // 行全部常驻（无数据也写 --），不再需要「等待数据…」占位
+        // 行全部常驻（无数据写空白），不再需要「等待数据…」占位
         tvWaiting?.visibility = View.GONE
     }
 
@@ -363,12 +448,12 @@ class TpmsOverlayService : android.app.Service() {
     }
 
     /**
-     * ⭐ **行恒显**：有值写「标签  值」，无值写「标签  --」，
-     * 绝不 GONE。以前无数据/为 0 就隐藏，悬浮框高度忽大忽小、
-     * 开着的项目还会整行消失（用户要求「不要隐藏」）。
+     * ⭐ **行恒显**：有值写「标签  值」，无值写**整行空白**（不再出现「--」）。
+     * 绝不 GONE —— 保留行高与行序，开关开着的项目始终占一行，
+     * 悬浮框高度不跳动。用一个空格而非空串，确保行高稳定。
      */
     private fun showRow(tv: TextView, label: String, value: String?, alarm: Boolean = false) {
-        tv.text = if (value == null) "$label  --" else "$label  $value"
+        tv.text = if (value == null) " " else "$label  $value"
         tv.setTextColor(
             if (value != null && alarm) getColor(R.color.abnormal) else themeTextColor
         )
@@ -380,7 +465,11 @@ class TpmsOverlayService : android.app.Service() {
         rowViews[key]?.let { showRow(it, label, value, alarm) }
     }
 
-    /** 胎压行：标签「前轮/后轮」，**不带 Bar 单位**，标签与数值之间留双空格 */
+    /**
+     * 胎压片段：标签「前轮/后轮」，**不带 Bar 单位**，标签与数值之间留双空格。
+     * ⭐ 前 / 后轮两个片段在布局里被放进同一个水平行（见 [applyOrderAndVisibility]），
+     *    所以这里只负责各自的文本，间隔由容器的 margin 承担。
+     */
     private fun renderTpmsHalf(st: TpmsMonitor.UiState?, pos: Int, tv: TextView) {
         val prefs = (application as YybmsApp).prefs
         val label = getString(
@@ -560,12 +649,71 @@ class TpmsOverlayService : android.app.Service() {
         renderAll()
     }
 
+    // ==================== 后台 GPS：只维持会话极速 ====================
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    /**
+     * ⭐⭐ 服务自带的 GPS 订阅，**唯一职责**是把显示速度喂给会话极速。
+     *
+     * ⚠️ **不做**曲线采样 / GPS 丢失推算 / 水印渲染 —— 那些仍归实时页管。
+     * 两条订阅共用 [io.github.supit.rideassist.util.SpeedDisplay] 的口径常量，
+     * 但各自持有独立 Filter（低通序列不能被两个回调交错打乱）。
+     */
+    @SuppressLint("MissingPermission")
+    private fun startOverlayGps() {
+        if (!hasLocationPermission()) return
+        val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
+        overlayLocationManager = lm
+        listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).forEach { provider ->
+            // 未授权 / 该 provider 不存在都只跳过这一路，绝不让服务起不来
+            runCatching {
+                lm.requestLocationUpdates(provider, 1000L, 0f, this, Looper.getMainLooper())
+            }
+        }
+    }
+
+    private fun stopOverlayGps() {
+        runCatching { overlayLocationManager?.removeUpdates(this) }
+        overlayLocationManager = null
+        overlaySpeedFilter.reset()
+        // ⭐ 服务停了且 APP 不在前台 → 清掉速度证据，
+        //    否则应用级采集器会拿一个陈旧速度继续判「在动」。
+        val app = application as? YybmsApp
+        if (app != null && !app.isSelfForeground) app.sessionTracker.liveSpeedKmh = null
+    }
+
+    override fun onLocationChanged(location: Location) {
+        // ⚠️ 无速度解算（隧道 / 树荫）不能当 0 喂进去，会污染低通序列
+        if (!location.hasSpeed()) return
+        val shown = overlaySpeedFilter.push(location.speed * 3.6f)
+        val app = application as? YybmsApp ?: return
+        val tracker = app.sessionTracker
+        // 退后台后实时页已停 GPS，MoveGate 的第三路证据由这里续上；
+        // APP 在前台时让实时页独占写入，避免两路互相覆盖。
+        if (!app.isSelfForeground) tracker.liveSpeedKmh = overlaySpeedFilter.realSpeed
+        // ⭐ 会话极速唯一写入口；破纪录时 emit speedRevisionFlow → 悬浮窗立刻重渲
+        tracker.noteSpeed(shown)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+    override fun onProviderEnabled(provider: String) = Unit
+    override fun onProviderDisabled(provider: String) {
+        overlaySpeedFilter.reset()
+    }
+
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         applyTheme()
     }
 
     override fun onDestroy() {
+        stopOverlayGps()
         runCatching { stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE) }
         rootView?.let { v ->
             runCatching { windowManager?.removeView(v) }
@@ -577,6 +725,7 @@ class TpmsOverlayService : android.app.Service() {
         orderListener = null
         handler.removeCallbacksAndMessages(null)
         tvWaiting = null
+        tpmsPairRow = null
         scope.cancel()
         isRunning = false
         super.onDestroy()
