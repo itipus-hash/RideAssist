@@ -468,9 +468,13 @@ header?.let { addRow(it, isHeader = true) }
                 add(row)
                 if (i == probeIdx && tempText.isNotBlank()) add(listOf("温度", tempText))
             }
-            add(listOf("总压", "%.2f V".format(d.totalVoltage)))
-            add(listOf("电流", "%.2f A".format(d.totalCurrent)))
-            add(listOf("功率", "%.0f W".format(d.power)))
+            // ⭐ 总压 / 电流 / 功率合一行（用户 2026-11-09）
+            add(
+                listOf(
+                    "总压",
+                    "%.2fV / %.2fA / %.0fW".format(d.totalVoltage, d.totalCurrent, d.power)
+                )
+            )
             add(listOf("SOC", "${d.soc.toInt()} %"))
             add(listOf("剩余容量", "%.2f Ah / %.2f Ah".format(d.remainingCapacity, d.ratedCapacity)))
             add(listOf("循环", "${d.cycleCount} 次"))

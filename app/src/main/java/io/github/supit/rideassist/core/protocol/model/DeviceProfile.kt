@@ -86,8 +86,14 @@ data class DeviceProfile(
         if (firmwareVersion.isNotEmpty() && firmwareVersion != "--") row("版本", firmwareVersion)
         if (serialNumber.isNotEmpty()) row("SN", serialNumber)
         if (batteryType >= 0) row("电池类型", batteryTypeName(batteryType))
-        if (maxCellNumSupported > 0) row("最大串数", "$maxCellNumSupported")
-        if (cellCount > 0) row("实际串数", "$cellCount")
+        // ⭐ 最大串数与实际串数合并成一行（用户 2026-11-09：一行够了）
+        if (maxCellNumSupported > 0) {
+            row(
+                "最大串数",
+                if (cellCount > 0) "$maxCellNumSupported / 实际 $cellCount"
+                else "$maxCellNumSupported"
+            )
+        }
         if (tempProbeCount > 0) row("温度探头", "$tempProbeCount 路")
         if (ratedCapacity > 0f) row("额定容量", "%.1f Ah".format(ratedCapacity))
 

@@ -731,7 +731,14 @@ fun deviceIdentity(): List<List<String>> {
    if (firmwareVersion != "--") row("版本", firmwareVersion)
    if (serialNumber.isNotEmpty()) row("SN", serialNumber)
    if (batteryType >= 0) row("电池类型", batteryTypeName)
-   if (maxCellNumSupported > 0) row("最大串数", "$maxCellNumSupported")
+        // ⭐ 最大串数与实际串数合并成一行（与 DeviceProfile.identityRows 同口径）
+        if (maxCellNumSupported > 0) {
+            row(
+                "最大串数",
+                if (cellCount > 0) "$maxCellNumSupported / 实际 $cellCount"
+                else "$maxCellNumSupported"
+            )
+        }
         if (tempProbeCount > 0) row("温度探头", "$tempProbeCount 路")
         if (sleepTimeSec > 0) row("休眠时间", "${sleepTimeSec}S")
     return rows.map { listOf(it.first, it.second) }
