@@ -26,7 +26,8 @@
 
             <!-- ============ 连接设置（自设置页迁入，放最上面，用户要求） ============ -->
             <com.google.android.material.card.MaterialCardView
-                style="@style/DiagCard">
+                style="@style/DiagCard"
+                android:layout_marginTop="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -133,17 +134,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-<!-- 设备实况 -->
-       <com.google.android.material.card.MaterialCardView
-         style="@style/DiagCard">
-
-    <!-- ⚠️ paddingStart 8dp：这张卡里没有 DiagTable 包裹，
-         实测首字比其它区块靠左 23px（约 8dp），补上才和告警项/型号行对齐 -->
-    <TextView
-    style="@style/DiagText"
-    android:id="@+id/tv_device" />
-      </com.google.android.material.card.MaterialCardView>
-
 <!-- 本机设备身份：读不到的项不显示 -->
 <!-- ⚠️ 用 LinearLayout 当「隐形表格」容器，不用 TextView 拼空格：
 实机 monospace 字体里 ─ │ 等制表符并非等宽，画线会断成虚线 -->
@@ -158,6 +148,12 @@
      android:layout_width="match_parent"
            android:layout_height="wrap_content"
   android:orientation="vertical" />
+
+            <!-- ⭐ 电池实况的动态量（温度 / 断开标注）：与静态表同一张卡 -->
+            <TextView
+                style="@style/DiagText"
+                android:id="@+id/tv_device"
+                android:layout_marginTop="6dp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -193,6 +189,7 @@ style="@style/DiagCard">
 
             <!-- ⑥ 保护参数 -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_anchors"
        style="@style/DiagCard">
 
   <LinearLayout

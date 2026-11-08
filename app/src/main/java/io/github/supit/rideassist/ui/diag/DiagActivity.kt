@@ -7,6 +7,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.text.TextPaint
 import android.widget.Toast
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -247,10 +248,11 @@ class DiagActivity : AppCompatActivity() {
             centerValues = true,
         )
 
-        // 均衡参数：只有真的有值才建区块，否则整块不显示
-        // （空表留一个标题比不显示更难看，用户也分不清是"没数据"还是"坏了"）
+        // 均衡参数：无值时**整卡隐藏**（contentPadding 会留出一个空白格子，
+        // 用户 2026-11-08 要求删掉这个没内容的格子）
         b.llAnchors.removeAllViews()
         val anchors = d.protocolAnchors()
+        b.cardAnchors.visibility = if (anchors.isNotEmpty()) View.VISIBLE else View.GONE
         if (anchors.isNotEmpty()) {
             b.llAnchors.addView(sectionTitle("均衡参数"))
             fillTable(b.llAnchors, header = null, rows = anchors, numericFrom = 1)
@@ -412,16 +414,22 @@ header?.let { addRow(it, isHeader = true) }
         }
     }
 
+    /**
+     * ⭐ **保护板信息（合并版）**：静态身份 + 电池动态量合并成一张表
+     *（用户 2026-11-08：电池信息与保护板信息有重复，合并到保护板信息）。
+     *
+     * - 静态行来自 [DeviceProfile]（保护板型号/版本/SN/电池类型/串数/额定容量…）
+     * - 动态行来自实时数据（总压/电流/功率/SOC/剩余容量/循环/均衡）
+     * - 温度与断开标注在表格下方（长文本不适合放固定宽度列）
+     */
     private fun renderDevice(
         raw: BmsRealtimeData,
         live: Boolean,
         savedAtMs: Long = 0L,
         profile: io.github.supit.rideassist.core.protocol.model.DeviceProfile? = null,
     ) {
-        // ⚠️ 快照/实时数据里可能**缺设备信息帧的字段**（电池类型、固件、探头数、
-        //    串数），只靠实时帧就会显示成「-- / 未读到」，看着像缓存不全。
-        //    这里用 DeviceProfile 缓存兜底：设备信息帧比实时帧到得晚，
-        //    但它的值早就存在 device_cache 里了。
+        // 快照/实时数据可能缺设备信息帧字段（电池类型、固件、探头数、串数），
+        // 用 DeviceProfile 缓存兜底
         val d = raw.copy(
             batteryType = if (raw.batteryType >= 0) raw.batteryType
             else profile?.batteryType ?: -1,
@@ -434,36 +442,51 @@ header?.let { addRow(it, isHeader = true) }
             maxCellNumSupported = if (raw.maxCellNumSupported > 0) raw.maxCellNumSupported
             else profile?.maxCellNumSupported ?: 0,
         )
-        b.tvDevice.text = buildString {
-            appendLine("电池　${d.batteryTypeName} / ${d.cellCount} 串" +
-                if (d.maxCellNumSupported > 0) "（最大支持 ${d.maxCellNumSupported} 串）" else "")
-            appendLine("固件　${d.firmwareVersion}")
-            appendLine("探头　${if (d.tempProbeCount > 0) "${d.tempProbeCount} 路" else "未读到"}")
-            appendLine("总压　${fmt(d.totalVoltage.toDouble(), 2)} V　" +
-                "电流 ${fmt(d.totalCurrent.toDouble(), 2)} A　" +
-                "功率 ${fmt(d.power.toDouble(), 0)} W")
-            appendLine("SOC　${d.soc.toInt()} %　剩余 ${fmt(d.remainingCapacity.toDouble(), 2)} Ah" +
-                " / ${fmt(d.ratedCapacity.toDouble(), 2)} Ah")
-            appendLine("循环　${d.cycleCount} 次")
-            // ⭐ 与首页温度槽位**同一套规则**：
-            // 1. 探头路数决定显示几个槽位（T3/T4 在 2 路机型上是填充数据）
-            // 2. **同值合并**（TempSlotDedup）：T1==T2 只显示 T1，MOS 不参与
-            val probeCount = d.tempProbeCount
-            val rawTemps = buildList {
-                add(d.mosTemp?.let { "MOS %.1f℃".format(it) })
-                if (probeCount >= 1) d.temp1?.let { add("T1 %.1f℃".format(it)) }
-                if (probeCount >= 2) d.temp2?.let { add("T2 %.1f℃".format(it)) }
-                if (probeCount >= 3) d.temp3?.let { add("T4 %.1f℃".format(it)) }
+
+
+        // ⭐ 温度与首页同规则：探头数过滤 + **同值合并**（TempSlotDedup）。
+        // ⚠️ 去重比较的是**数值字符串** —— 必须传纯数值（不带 T1/T2 前缀），
+        //    带了前缀「T1 30.0℃」「T2 30.0℃」字符串不同，永远合并不了
+        //    （用户 2026-11-08 实测「T1 T2 不是一样吗，还一起显示」）。
+        val probeCount = d.tempProbeCount
+        val rawTemps = buildList {
+            add("MOS" to d.mosTemp)
+            if (probeCount >= 1) add("T1" to d.temp1)
+            if (probeCount >= 2) add("T2" to d.temp2)
+            if (probeCount >= 3) add("T4" to d.temp3)
+        }
+        val display = rawTemps.map { it.second?.let { v -> "%.1f℃".format(v) } }
+        val hidden = io.github.supit.rideassist.util.TempSlotDedup.hiddenIndices(display)
+        val tempText = rawTemps.mapIndexed { i, (label, _) ->
+            if (hidden[i]) null else "$label ${display[i]}"
+        }.filterNotNull().joinToString("  ")
+
+        // ⭐ 温度行放进表格「温度探头」下面（用户要求）
+        val rows = buildList {
+            val base = profile?.identityRows() ?: d.deviceIdentity()
+            val probeIdx = base.indexOfFirst { it[0] == "温度探头" }
+            base.forEachIndexed { i, row ->
+                add(row)
+                if (i == probeIdx && tempText.isNotBlank()) add(listOf("温度", tempText))
             }
-            val hidden = io.github.supit.rideassist.util.TempSlotDedup
-                .hiddenIndices(rawTemps)
-            val temps = rawTemps.mapIndexed { i, v -> if (hidden[i]) null else v }.filterNotNull()
-            appendLine("温度　${if (temps.isEmpty()) "无探头" else temps.joinToString("  ")}")
+            add(listOf("总压", "%.2f V".format(d.totalVoltage)))
+            add(listOf("电流", "%.2f A".format(d.totalCurrent)))
+            add(listOf("功率", "%.0f W".format(d.power)))
+            add(listOf("SOC", "${d.soc.toInt()} %"))
+            add(listOf("剩余容量", "%.2f Ah / %.2f Ah".format(d.remainingCapacity, d.ratedCapacity)))
+            add(listOf("循环", "${d.cycleCount} 次"))
+            add(listOf("均衡", if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"))
+        }
+        fillTable(b.llIdentity, header = null, rows = rows, numericFrom = 1, centerValues = true)
+
+        b.tvDevice.text = buildString {
+            // ⭐ 动态量用文本（fillTable 的动态行渲染不出来，原因未明，先用已验证有效的方式）
+            appendLine("总压　%.2f V　电流 %.2f A　功率 %.0f W".format(d.totalVoltage, d.totalCurrent, d.power))
+            appendLine("SOC　${d.soc.toInt()} %　剩余 %.2f / %.2f Ah　循环 %d 次".format(d.remainingCapacity, d.ratedCapacity, d.cycleCount))
             appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
+            if (tempText.isNotBlank()) appendLine("温度　" + tempText)
             if (!live && savedAtMs > 0L) {
-                append("\n（保护板已断开，以上为 ")
-                append(clockOf(savedAtMs))
-                append(" 最后一次读到的数据）")
+                append("（保护板已断开，以上为 ${clockOf(savedAtMs)} 最后一次读到的数据）")
             }
         }
     }

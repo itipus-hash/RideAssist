@@ -14,7 +14,7 @@ android {
         // 需求指定 TargetSDK 34：运行时权限行为与需求文档一致
         targetSdk = 34
         versionCode = 21
-        versionName = "1.0.23"
+        versionName = "1.0.24"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
