@@ -37,19 +37,38 @@ object SpeedDisplay {
     const val CURRENT_EVIDENCE_GRACE_MS = 3_000L
 
     /**
-     * 无电流证据时，GPS 要**持续**达到该速度才允许独立上锁（无 BMS 也能测速）。
-     * 8km/h 明显高于静止漂移量级（1~5km/h）。
+     * 无电流证据时，GPS 要**持续**达到该速度才允许独立上锁（没连保护板也能测速）。
+     *
+     * ⚠️ 2026-11-08 上调 8 → 10：用户反馈「没连保护板也出现了速度曲线」。
+     * 静止时 GPS 速度噪声偶发能到 5~9km/h，8 太松；10 明显高于噪声量级。
      */
-    const val MOTION_START_KMH = 8f
+    const val MOTION_START_KMH = 10f
 
-    /** 上面的起速阈值要持续多久（ms）才上锁 —— 防止单个 GPS 尖峰误触发 */
-    const val MOTION_START_HOLD_MS = 1_500L
+    /**
+     * 上面的起速阈值要持续多久（ms）才上锁 —— 防止 GPS 尖峰误触发。
+     *
+     * ⚠️ 2026-11-08 上调 1.5s → 3s：静止时 GPS 速度噪声可能连续两三帧
+     * 偏高（尤其贴窗/高楼下），1.5 秒挡不住；3 秒要求基本排除瞬时噪声。
+     * 连了保护板时不走这条路（电流证据立即上锁），所以不影响起步手感。
+     */
+    const val MOTION_START_HOLD_MS = 3_000L
 
     /** 已锁存后，GPS 低于 [ZERO_THRESHOLD_KMH] 持续多久判定「真停稳了」 */
     const val MOTION_STOP_HOLD_MS = 5_000L
 
     /** 超过这么久没有任何 GPS 帧 → 自动解锁，防止陈旧速度证据挂死 */
     const val MOTION_GPS_STALE_MS = 15_000L
+
+    /**
+     * **位移平均速度**低于该值 → 判定「位置根本没动」，强制否决 GPS 速度。
+     *
+     * 2026-11-08 用户第二次反馈漂移（「我甚至保护板都没连接」）后加的第三道闸：
+     * 静止时 `Location.getSpeed()` 可能报 5~9km/h 并持续几秒，靠速度判据挡不干净；
+     * 但同一段时间里**位置几乎没位移**，这条判据不受速度噪声影响。
+     *
+     * 取 6km/h 略高于显示阈值 5：慢于 6km/h 本来也该显示 0，否决不会误伤真骑行。
+     */
+    const val STILL_DISPLACEMENT_KMH = 6f
 
     /**
      * ⭐⭐ **这一帧的采样值要不要追加进速度曲线队列**。

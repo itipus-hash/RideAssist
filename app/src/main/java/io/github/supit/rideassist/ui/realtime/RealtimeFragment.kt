@@ -7,9 +7,11 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.util.Log
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import io.github.supit.rideassist.util.SpeedDisplay
 import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.LayoutInflater
@@ -65,6 +67,12 @@ class RealtimeFragment : Fragment(), LocationListener {
     /** GPS 速度低通滤波后的值（km/h） */
     /** ⭐ 速度口径统一走 SpeedDisplay.Filter（与悬浮服务同源） */
     private val speedFilter = io.github.supit.rideassist.util.SpeedDisplay.Filter()
+
+    /**
+     * 「位置到底动没动」的粗判据 —— 用来否决静止时的 GPS 速度噪声。
+     * 见 [io.github.supit.rideassist.util.GpsMotionProbe]。
+     */
+    private val motionProbe = io.github.supit.rideassist.util.GpsMotionProbe()
 
     /** 本次 APP 会话的最高速度（km/h，整数显示）。
      *  存在 Activity 上，切页/重建/断连都不丢。 */
@@ -895,6 +903,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         // ⭐ 无GPS 数据源 = 没有速度信号 → 曲线不画（塞 0 会出现贴底横线）
         hasSpeedSignal = false
         speedFilter.reset()
+        motionProbe.reset()
         tracker.liveSpeedKmh = null
         // 无条件调用，队列非空时它会清空并重绘
         pushSpeedSample(0)
@@ -921,6 +930,9 @@ class RealtimeFragment : Fragment(), LocationListener {
             showNoGpsSource()
             return
         }
+        // ⭐ 重新订阅时清空位移窗口：暂停前的旧点和刚恢复的帧跨了几分钟，
+        //    算出来的「位移平均速度」毫无意义，会误判成在移动/静止
+        motionProbe.reset()
         try {
             // 先立刻取一次，避免等待回调
             lm.getProviders(true)
@@ -991,6 +1003,26 @@ class RealtimeFragment : Fragment(), LocationListener {
             return handleGpsLost(headingOf(loc))
         }
 
+        // ⭐⭐⭐ **速度来源可信度过滤**（2026-11-08 用户第二次反馈漂移）。
+        //
+        // 为什么必须有这道闸：
+        // 1. 同时订阅了 `NETWORK_PROVIDER` —— 网络定位的 `speed` 是基站/热点
+        //    推算出来的，**静止时会报出几到十几 km/h**，完全不能当速度用。
+        // 2. `startGpsUpdates()` 启动时会把 `getLastKnownLocation()` 喂进来，
+        //    那是**缓存的旧位置**（可能是几十分钟前骑行途中的），speed 是
+        //    当时的值 —— 打开 APP 瞬间就会凭空出现一个速度点。
+        // 3. 精度极差的定位帧（accuracy 几十上百米）速度同样不可信。
+        //
+        // 未通过就不更新速度、不喂运动锁存、不推进「GPS 恢复」计数。
+        if (!isSpeedTrusted(loc)) {
+            Log.d(
+                TAG_GPS,
+                "丢弃不可信速度 p=${loc.provider} acc=${loc.accuracy} " +
+                    "age=${System.currentTimeMillis() - loc.time}ms"
+            )
+            return
+        }
+
         // ============ 到这里说明本帧**有速度解算** ============
         // ⭐ 只有连续 GPS_RECOVER_CONFIRM_COUNT 次都拿到速度，才正式退出丢失态。
         if (gpsLostSinceMs != 0L) {
@@ -1006,18 +1038,50 @@ class RealtimeFragment : Fragment(), LocationListener {
 
         val kmh = loc.speed * 3.6f
         hasSpeedSignal = true
+        // ⭐⭐⭐ 第三道闸：**位移否决**。
+        // 静止时 Location.getSpeed() 可能持续报 5~9km/h（贴窗/高楼下/刚定位），
+        // 光靠速度阈值挡不干净；但同一段时间里位置几乎没动。
+        // 位移平均速度 < 6km/h 且跨度足够 → 强制解除锁存、本帧速度按 0 处理。
+        val placeKmh = motionProbe.accept(loc.latitude, loc.longitude, loc.time)
+        val still = placeKmh >= 0f && placeKmh < SpeedDisplay.STILL_DISPLACEMENT_KMH
+        if (still) tracker.resetMotionLatch()
         // ⭐⭐ 低通 / 5km/h 归零 / 取整统一由 SpeedDisplay 决定（唯一口径）。
         //    门控结论来自 Application 级的运动锁存：电流只在起步上锁，
         //    锁存后滑行（电流 0）由 GPS 速度维持，不会再把 40km/h 压成 0。
-        val shown = speedFilter.push(kmh, tracker.noteGpsSpeed(kmh))
+        val shown = speedFilter.push(kmh, if (still) false else tracker.noteGpsSpeed(kmh))
         // ⭐ 把低通后的真实速度共享给应用级采集器（MoveGate 第三路证据）；
         //   门控生效时 realSpeed=null，第三路证据同步失效。
         tracker.liveSpeedKmh = speedFilter.realSpeed
         // ⭐ 会话极速的唯一写入口；悬浮窗靠 speedRevisionFlow 同步
         tracker.noteSpeed(shown)
+        // ⭐ 漂移排查用（debug 包直接 `adb logcat -s RideAssistGps` 看）：
+        //    真出现速度曲线时，一眼就能看出是 GPS 报的速度、还是门控没拦住
+        Log.d(
+            TAG_GPS,
+            "gps v=${"%.1f".format(kmh)} acc=${loc.accuracy.toInt()}m " +
+                "place=${if (placeKmh < 0f) "样本不足" else "%.1f".format(placeKmh)} " +
+                "still=$still shown=$shown latched=${tracker.motionLatched}"
+        )
         applySpeedMax()
         renderSpeedColors(shown)
         pushSpeedSample(shown)
+    }
+
+    /**
+     * 本帧的速度值是否可信（见 [renderSpeed] 里的三道闸）。
+     *
+     * ⚠️ 只要有一项不满足就整帧丢弃，绝不"打折使用"：
+     * 半可信的速度一旦进了运动锁存，就会自己维持自己（锁存保持只看速度），
+     * 变成一条再也停不下来的假曲线。
+     */
+    private fun isSpeedTrusted(loc: Location): Boolean {
+        // ① 只认卫星定位。NETWORK_PROVIDER 的 speed 在静止时会凭空报出几到十几 km/h
+        if (loc.provider != LocationManager.GPS_PROVIDER) return false
+        // ② 不要缓存位置：getLastKnownLocation() 可能来自几十分钟前的骑行
+        if (System.currentTimeMillis() - loc.time > GPS_FRESH_MS) return false
+        // ③ 精度太差的帧速度噪声极大（accuracy <= 0 表示未知，放行）
+        if (loc.accuracy > 0f && loc.accuracy > GPS_MAX_ACCURACY_M) return false
+        return true
     }
 
     /**
@@ -1717,6 +1781,21 @@ class RealtimeFragment : Fragment(), LocationListener {
          * 功率/电流用同一个阈值毫无影响（0.5W/0.5A 已是很大的活动量）。
          */
         private const val IDLE_EPSILON_MV = 0.5f
+
+        /** GPS 漂移排查日志 tag（`adb logcat -s RideAssistGps`） */
+        private const val TAG_GPS = "RideAssistGps"
+
+        /**
+         * 速度帧的**新鲜度**上限。
+         *
+         * `startGpsUpdates()` 会先用 `getLastKnownLocation()` 补一个立即值，
+         * 那可能是几十分钟前骑行途中的缓存位置 —— 速度是当时的值，
+         * 直接采信就会「打开 APP 瞬间凭空出现一个速度点」。
+         */
+        private const val GPS_FRESH_MS = 3_000L
+
+        /** 精度差于该值（米）的速度一律不采信 */
+        private const val GPS_MAX_ACCURACY_M = 50f
 
         /**
          * ⚠️ 三个移动判据阈值（电流 1A / 功率 150W / 速度 5km/h）已**上移**到

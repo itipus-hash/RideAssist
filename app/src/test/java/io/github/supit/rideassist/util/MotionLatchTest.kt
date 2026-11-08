@@ -43,11 +43,23 @@ class MotionLatchTest {
         assertFalse(l.isLatched())
     }
 
+    /**
+     * ⭐ 2026-11-08 用户第二次反馈漂移（「我甚至保护板都没连接」）的回归锁。
+     * 静止时 GPS 速度噪声能长期停在 5~9km/h 区间，起速阈值必须是 10 才不会误锁。
+     */
+    @Test fun `低于起速阈值的持续噪声永远不上锁`() {
+        val l = MotionLatch()
+        repeat(60) { assertFalse(tick(l, 9f)) }
+        assertFalse(l.isLatched())
+    }
+
     @Test fun `无 BMS 数据时持续高速 GPS 也能独立上锁`() {
         val l = MotionLatch()
-        assertFalse(tick(l, 10f))                      // 计时起点
-        assertFalse(tick(l, 10f))                      // 1s < 1.5s
-        assertTrue(tick(l, 10f))                       // 2s ≥ 1.5s → 上锁
+        // 起速阈值 10km/h 要持续 3 秒，挡掉静止时连续两三帧的 GPS 噪声
+        assertFalse(tick(l, 12f))                      // 计时起点
+        assertFalse(tick(l, 12f))                      // 1s
+        assertFalse(tick(l, 12f))                      // 2s
+        assertTrue(tick(l, 12f))                       // 3s ≥ 3s → 上锁
         assertTrue(tick(l, 30f))
         assertTrue(tick(l, 42f))
     }

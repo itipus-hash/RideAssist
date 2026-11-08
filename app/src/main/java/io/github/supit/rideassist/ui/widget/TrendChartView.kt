@@ -40,8 +40,8 @@ class TrendChartView @JvmOverloads constructor(
         /** 历史渐变的色标位置，必须与 colors.xml 里四个颜色的顺序对齐 */
         private val GRAD_STOPS = floatArrayOf(0f, 0.45f, 0.72f, 1f)
 
-        /** 历史曲线描边宽度（dp） */
-        private const val HISTORY_STROKE_DP = 2.5f
+        /** 曲线描边宽度（dp）：实时与历史共用，保证两种模式观感一致 */
+        private const val CURVE_STROKE_DP = 2.5f
 
         /** 历史曲线填充透明度：日间 / 夜间 */
         private const val FILL_ALPHA_DAY = 0.22f
@@ -231,8 +231,17 @@ class TrendChartView @JvmOverloads constructor(
         val lower = if (hasNegative) -maxAbs else 0f
         val range = (upper - lower).takeIf { it > 0f } ?: 1f
 
+        // ⭐ 实时曲线也用与历史模式**同一套 Y 向渐变**（用户要求「实时曲线也改成一样的彩色」）：
+        // 高处暖色、低处冷色。shader 坐标固定在画布上，所以颜色只跟画到哪个高度有关，
+        // 与数据值、采样密度都无关 —— 不会出现某一帧突然整条变色。
+        // ⚠️ `color` 参数只在没有 shader 时兜底（例如将来要画纯色辅助线）。
+        val shaderTop = topPadding
+        val shaderBottom = topPadding + chartHeight
+        ensureShaders(shaderTop, shaderBottom)
         linePaint.color = color
-        linePaint.shader = null
+        linePaint.shader = strokeShader
+        // 与历史模式同一粗细：以前这里用 4px（约 1.3dp），比历史线细一半
+        linePaint.strokeWidth = CURVE_STROKE_DP * resources.displayMetrics.density
         val path = Path()
 
         // ⭐⭐ **固定像素间距 + 从左侧裁剪**（用户要求："曲线永远只占一个屏幕，
@@ -258,6 +267,7 @@ class TrendChartView @JvmOverloads constructor(
         //  - 点数**超过**容量 → 锚定**右边缘**，旧点等距向左滚出。
         val anchorRight = visibleCount >= capacity
         val endX = if (anchorRight) chartRight else leftPadding + stepX * (visibleCount - 1)
+        val firstX = endX - stepX * (visibleCount - 1)
 
         for (i in 0 until visibleCount) {
             val index = startIndex + i
@@ -267,15 +277,27 @@ class TrendChartView @JvmOverloads constructor(
             val y = topPadding + chartHeight * (1f - ratio)
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
+
+        // ① 填充：与历史模式同样的闭合方式（沿曲线 → 垂直落到底线 → 回起点）
+        val fillPath = Path(path)
+        fillPath.lineTo(endX, shaderBottom)
+        fillPath.lineTo(firstX, shaderBottom)
+        fillPath.close()
+        fillPaint.shader = fillShader
+        canvas.drawPath(fillPath, fillPaint)
+        fillPaint.shader = null
+
+        // ② 描边
         canvas.drawPath(path, linePaint)
 
-        // 末端点标记当前值 —— 锚在曲线的实际末端
+        // 末端点标记当前值 —— 锚在曲线的实际末端（FILL + shader 会自动取该高度颜色）
         val lastValue = data.last()
         val lastRatio = ((lastValue - lower) / range).coerceIn(0f, 1f)
         val lastY = topPadding + chartHeight * (1f - lastRatio)
         linePaint.style = Paint.Style.FILL
         canvas.drawCircle(endX, lastY, 6f, linePaint)
         linePaint.style = Paint.Style.STROKE
+        linePaint.shader = null
     }
 
     /**
@@ -323,7 +345,7 @@ class TrendChartView @JvmOverloads constructor(
 
         // ② 描边（shader 沿画布 Y 固定 → 高处橙红、低处青绿）
         linePaint.style = Paint.Style.STROKE
-        linePaint.strokeWidth = HISTORY_STROKE_DP * resources.displayMetrics.density
+        linePaint.strokeWidth = CURVE_STROKE_DP * resources.displayMetrics.density
         linePaint.strokeCap = Paint.Cap.ROUND
         linePaint.strokeJoin = Paint.Join.ROUND
         linePaint.shader = strokeShader
