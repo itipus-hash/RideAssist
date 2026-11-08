@@ -5,9 +5,12 @@ import io.github.supit.rideassist.core.ble.BleManager
 import io.github.supit.rideassist.core.ble.BleScanner
 import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.data.repo.MonitorRepository
+import io.github.supit.rideassist.core.gate.MoveGate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
  * 应用入口。手写依赖容器（不引入 Hilt，minSdk 21 场景下更轻）。
@@ -82,5 +85,30 @@ class YybmsApp : Application() {
             override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
             override fun onActivityDestroyed(a: android.app.Activity) {}
         })
+
+        // ⭐⭐⭐ **会话峰值 / 记录状态机的应用级喂数点**。
+        //
+        // 旧实现只在 RealtimeFragment 的 repeatOnLifecycle(STARTED) 里逐帧比对：
+        // 一旦切到导航软件，Activity onStop → Fragment 生命周期 STOPPED →
+        // 采集器被取消，peakRecords 整段冻结。于是悬浮窗的「Max压差」
+        // （以及 Max电流 / Max功率）看着永远不更新 —— 用户反馈的根因。
+        // sessionTracker 本来就是 Application 级单例，喂数也必须在同一层级。
+        //
+        // ⚠️ 只搬「状态机 + 三项 BMS 峰值」；曲线采样与骑行积分仍留在实时页
+        //    （它们依赖 GPS 显示的局部口径，搬走会改变统计语义）。
+        appScope.launch {
+            monitorRepository.realtime.collect { d ->
+                if (!d.hasDeviceData) return@collect   // 断连帧不采样（沿用旧口径）
+                val tracker = sessionTracker
+                // 判据只有 MoveGate 一处，速度证据取 tracker 里的最新 GPS 值
+                val verdict = MoveGate.evaluate(d, tracker.liveSpeedKmh)
+                tracker.updateRecordingState(verdict.moving, true)
+                if (!tracker.isRecording) return@collect
+                val T = io.github.supit.rideassist.ui.realtime.SessionSpeedTracker
+                tracker.updatePeak(T.CARD_POWER, d.power, d)
+                tracker.updatePeak(T.CARD_CURRENT, abs(d.totalCurrent), d)
+                tracker.updatePeak(T.CARD_DIFF, d.cellDiff, d)
+            }
+        }
     }
 }

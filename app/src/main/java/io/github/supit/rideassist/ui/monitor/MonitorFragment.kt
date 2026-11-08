@@ -239,10 +239,25 @@ class MonitorFragment : Fragment() {
      * ⭐ 温度卡动态槽位渲染。
      *
      * - 槽位 = MOS 温度 / 温度1 / 温度2 / 温度3（协议实际字段）
-     * - **默认显示 2 个**；探头读数超过 2 个按实际个数显示
-     * - 探头名可**长按自定义**（如「MOS 温度」→「MOSS 温度」），存 SP（空串=恢复默认）
+     * - 显示个数 = 1(MOS) + 设备上报的探头路数
+     * - 探头名**单击 / 长按**槽位列都能改名，存 SP（空串 = 恢复默认）
+     *
+     * ⚠️⚠️ **视图绝不能每帧重建**：renderRealtime 每秒回调一次，旧实现每次
+     * removeAllViews() 重新 inflate，手指按在名字上时目标 View 已被换掉 →
+     * 长按回调丢失（用户反馈「长按触发不灵敏」「不好再次触发」）。
+     * 现在只在「槽位数 / 自定义名」变化时重建，其余帧原地只更新数值。
      */
-    private fun renderTempSlots(data: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData) {
+    private var tempSlotSignature = ""
+    private var latestTempData: BmsRealtimeData? = null
+    private val tempSlotCols = mutableListOf<android.widget.LinearLayout>()
+
+    /** 点击「电池状态：异常」时浮出的具体告警项；null = 正常/无数据，点击无动作 */
+    private var alarmDetailText: String? = null
+
+    private fun renderTempSlots(data: BmsRealtimeData) {
+        // 改名弹窗关闭回调可能晚于视图销毁（旋转/切页），先兜住
+        if (_binding == null) return
+        latestTempData = data
         val container = binding.llTempSlots
         val prefs = io.github.supit.rideassist.YybmsAppHolder.from(requireContext()).prefs
         data class Slot(val key: String, val defLabel: String, val value: Float?)
@@ -252,67 +267,150 @@ class MonitorFragment : Fragment() {
             Slot("t2", getString(R.string.label_temp2), data.temp2),
             Slot("t3", getString(R.string.label_temp3), data.temp3),
         )
-        // ⭐ 显示个数 = 1(MOS) + 设备上报的探头路数（tempProbeCount，实机 2 路 → 3 槽）。
-        //   ⚠️ 不能用「最后有读数的槽」：T3/T4 字节在 2 路机型上是别的数据，
-        //   解析出的 27.0℃ 是垃圾值，按读数显示就会冒出「温度3」（用户实测）。
-        //   未拿到探头数（未连接/0）时默认 2 槽。
+        // ⭐ 槽位数只认设备上报的探头路数；T3/T4 在 2 路机型上是别的数据，
+        //   按「有没有读数」显示会冒出垃圾值（旧坑，勿改）。
         val probeCount = data.tempProbeCount
         val count = when {
             probeCount > 0 -> (1 + probeCount).coerceAtMost(slots.size)
             else -> 2
         }
-        // ⭐ 标题显示路数（用户要求）：「温度 · 2路」——让槽位数量有依据
         binding.tvTempTitle.text = if (probeCount > 0)
             getString(R.string.section_temp) + " · ${probeCount}路"
         else
             getString(R.string.section_temp)
 
-        container.removeAllViews()
+        val labels = (0 until count).map { prefs.tempLabel(slots[it].key) ?: slots[it].defLabel }
+        val signature = "$count|" + labels.joinToString("|")
+        if (signature != tempSlotSignature) {
+            tempSlotSignature = signature
+            container.removeAllViews()
+            tempSlotCols.clear()
+            for (i in 0 until count) {
+                val col = layoutInflater.inflate(
+                    R.layout.item_temp_slot, container, false
+                ) as android.widget.LinearLayout
+                col.findViewById<android.widget.TextView>(R.id.tv_temp_slot_label).text = labels[i]
+                // ⭐ 热区绑「整列」（标签 + 数值都能点），单击和长按都进改名。
+                //    单点文字太窄是长按命中不稳的另一半原因。
+                val openEdit = {
+                    editTempLabel(prefs, slots[i].key, slots[i].defLabel, labels[i]) {
+                        tempSlotSignature = ""   // 强制下一帧按新名字重建
+                        latestTempData?.let { renderTempSlots(it) }
+                    }
+                }
+                col.isClickable = true
+                col.isLongClickable = true
+                col.setOnClickListener { openEdit() }
+                col.setOnLongClickListener { openEdit(); true }
+                tempSlotCols.add(col)
+                container.addView(col)
+            }
+        }
+        // 只更新数值（不重建视图，长按/弹窗期间也不会被打断）
         val abnormal = ContextCompat.getColor(requireContext(), R.color.abnormal)
         val normal = ContextCompat.getColor(requireContext(), R.color.text_primary)
         for (i in 0 until count) {
-            val slot = slots[i]
-            val label = prefs.tempLabel(slot.key) ?: slot.defLabel
-            // ⭐ 用 XML inflate（style 只能从布局应用）：等分 + 区域居中，与胎压卡同款
-            val col = layoutInflater.inflate(
-                io.github.supit.rideassist.R.layout.item_temp_slot, container, false)
-                as android.widget.LinearLayout
-            val labelView = col.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_temp_slot_label)
-            val valueView = col.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_temp_slot_value)
-            labelView.text = label
-            labelView.setOnLongClickListener {
-                editTempLabel(prefs, slot.key, slot.defLabel, label) { renderTempSlots(data) }
-                true
-            }
-            valueView.text = slot.value?.let { getString(R.string.format_temp, it) }
+            val valueView = tempSlotCols.getOrNull(i)
+                ?.findViewById<android.widget.TextView>(R.id.tv_temp_slot_value) ?: continue
+            val v = slots[i].value
+            valueView.text = v?.let { getString(R.string.format_temp, it) }
                 ?: getString(R.string.temp_none)
             valueView.setTextColor(
-                if (slot.value != null && (slot.value > 60f || slot.value < -10f)) abnormal
-                else normal
+                if (v != null && (v > 60f || v < -10f)) abnormal else normal
             )
-            container.addView(col)
         }
     }
 
-    /** 长按探头名 → 输入框改名（空 = 恢复默认），保存后回调刷新 */
+    /**
+     * 探头改名。**任何关闭方式都保存**，只有显式点「取消」才放弃：
+     * 点弹窗外 / 按返回 / 输入法「完成」/ 点确定 —— 一律落盘。
+     * 旧实现只有「确定」才写 SP，点别处直接丢字，用户还得再触发一次长按。
+     */
     private fun editTempLabel(
-        prefs: io.github.supit.rideassist.data.prefs.AppPrefs,
+        prefs: AppPrefs,
         key: String, defLabel: String, current: String,
         onSaved: () -> Unit,
     ) {
-        val input = android.widget.EditText(requireContext()).apply {
+        val ctx = requireContext()
+        val input = android.widget.EditText(ctx).apply {
             setText(current)
             setSelection(text.length)
+            hint = defLabel
+            isSingleLine = true
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
         }
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+        var cancelled = false
+        var saved = false
+        fun save() {
+            if (saved) return
+            saved = true
+            prefs.setTempLabel(key, input.text.toString().trim())
+            onSaved()
+        }
+        val dlg = MaterialAlertDialogBuilder(ctx)
             .setTitle("探头名称")
             .setView(input)
-            .setPositiveButton(R.string.confirm) { _, _ ->
-                prefs.setTempLabel(key, input.text.toString().trim())
-                onSaved()
+            .setPositiveButton(R.string.confirm) { _, _ -> }   // 统一交给 onDismiss
+            .setNegativeButton(R.string.cancel) { _, _ -> cancelled = true }
+            .setOnDismissListener { if (!cancelled) save() }
+            .create()
+        input.setOnEditorActionListener { _, action, _ ->
+            if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                dlg.dismiss(); true
+            } else false
+        }
+        dlg.show()
+        input.requestFocus()
+        dlg.window?.setSoftInputMode(
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+        )
+    }
+
+    /** 均衡状态：关闭 = 原文灰色；开启 = 「开启」两字绿色，与「关闭」等长不换行 */
+    private fun setBalanceState(on: Boolean) {
+        val tv = binding.tvBalanceState
+        if (!on) {
+            tv.text = getString(R.string.balance_off)
+            tv.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
+            return
+        }
+        val full = getString(R.string.balance_on)          // 「均衡：开启」
+        val sp = android.text.SpannableString(full)
+        val start = full.indexOf("开启")
+        if (start >= 0) {
+            sp.setSpan(
+                android.text.style.ForegroundColorSpan(
+                    ContextCompat.getColor(requireContext(), R.color.state_connected)),
+                start, start + 2, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        tv.setText(sp, android.widget.TextView.BufferType.SPANNABLE)
+    }
+
+    /** 点击「电池状态：异常」→ 浮出具体告警项（点弹泡外部自动消失） */
+    private fun showAlarmTooltip(anchor: View) {
+        val detail = alarmDetailText ?: return
+        val ctx = anchor.context
+        val d = resources.displayMetrics.density
+        val pad = (12 * d).toInt()
+        val body = android.widget.TextView(ctx).apply {
+            text = detail
+            setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            textSize = 13f
+            setPadding(pad, (8 * d).toInt(), pad, (8 * d).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 10 * d
+                setColor(ContextCompat.getColor(ctx, R.color.surface))
+                setStroke(1, ContextCompat.getColor(ctx, R.color.diag_table_line))
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+        }
+        val pop = android.widget.PopupWindow(
+            body, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT, true
+        )
+        pop.elevation = 8 * d
+        pop.isOutsideTouchable = true
+        runCatching { pop.showAsDropDown(anchor, 0, (4 * d).toInt()) }
     }
 
     private fun startClock() {
@@ -575,6 +673,10 @@ class MonitorFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        tempSlotSignature = ""
+        tempSlotCols.clear()
+        latestTempData = null
+        alarmDetailText = null
         super.onDestroyView()
         // ⚠️ 必须先关掉浮窗再置空 binding：Dialog 持有 Activity context，
         // 不主动 dismiss 会造成窗口泄漏（切页后浮窗还留在屏幕上）
@@ -1176,34 +1278,32 @@ class MonitorFragment : Fragment() {
                 ContextCompat.getColor(requireContext(), R.color.text_tertiary)
             )
             binding.tvBalanceState.text = getString(R.string.value_none)
+            alarmDetailText = null
         } else {
             // ⭐⭐ 与弹窗**同一套判据**：电压类优先用「实测值 vs 0xA0 读到的阈值」，
             // 不直接采信硬件告警位（它带迟滞/延时，会在未超阈值时报警）。
             // 阈值未读到时才退回告警位。
             val effective = data.effectiveAlarms()
+            // ⭐ 异常时只显示「异常」两字（红色），具体告警项点击后再浮出
+            binding.tvAlarmTags.setOnClickListener { showAlarmTooltip(it) }
             if (effective.isEmpty()) {
                 binding.tvAlarmTags.setText(R.string.battery_state_normal)
                 binding.tvAlarmTags.setTextColor(
                     ContextCompat.getColor(requireContext(), R.color.state_connected)
                 )
+                alarmDetailText = null
             } else {
                 binding.tvAlarmTags.text = getString(
-                    R.string.battery_state_abnormal,
-                    effective.joinToString("  ") { it.label }
+                    R.string.battery_state_abnormal, getString(R.string.state_abnormal_word)
                 )
                 binding.tvAlarmTags.setTextColor(
                     ContextCompat.getColor(requireContext(), R.color.abnormal)
                 )
+                alarmDetailText = effective.joinToString("\n") { "• ${it.label}" }
             }
-            // 均衡：读 bArr[118..121] 逐串位，显示正在均衡的具体串号
-            binding.tvBalanceState.text = if (data.balanceOn) {
-                getString(
-                    R.string.balance_on_cells,
-                    data.balancingCells.joinToString(",")
-                )
-            } else {
-                getString(R.string.balance_off)
-            }
+            // ⭐ 均衡：不再罗列 17 串号（又长又占三行、用户明确不要），
+            //    只给与「关闭」等长的两字状态「开启」，并染绿。
+            setBalanceState(data.balanceOn)
         }
         // 循环次数同理：没数据时不要显示 0（会误导为"从没循环过"）
         binding.tvCycleCount.text = if (data.hasDeviceData) {

@@ -31,9 +31,9 @@ import kotlinx.coroutines.launch
  * - **单击**（<500ms 未拖动）→ 返回本应用；**按住 ≥500ms 松开** → 关闭
  *
  * ## 行显隐（用户要求）
- * - 开关关闭 / 无数据 / 数值为 0 的行不显示
- * - 有开关开着但行全部无有效数据 → 显示「等待数据…」占位
- *   （否则启动后看不到任何反馈，像「没反应」）
+ * - **每个信息单独一行**，开关打开的项目恒定占一行；
+ *   没数据也**不隐藏**（写「标签  --」），行数不跳动
+ * - 「空格占位」项目 = 一条纯空白行
  * - 所有项目开关都关 → 整框隐藏
  */
 class TpmsOverlayService : android.app.Service() {
@@ -93,6 +93,9 @@ class TpmsOverlayService : android.app.Service() {
         /** 设置页拖动排序后通知悬浮窗重建行（服务运行时非空） */
         @Volatile
         var orderListener: (() -> Unit)? = null
+
+        /** ⭐ 空白占位项目 key（渲染时跳过数据填充） */
+        const val KEY_SPACE = "space"
 
         /** ⭐ 本 APP 切到导航软件后的预期状态（此期间长按悬浮窗不隐藏） */
         @Volatile
@@ -174,6 +177,7 @@ class TpmsOverlayService : android.app.Service() {
         // 每个项目一行（创建一次，排序时重排）
         OverlayItems.ALL.forEach { def ->
             rowViews[def.key] = TextView(this).apply {
+                if (def.key == KEY_SPACE) text = " "
                 textSize = 15f
                 setTextColor(themeTextColor)
             }
@@ -259,20 +263,17 @@ class TpmsOverlayService : android.app.Service() {
                 renderAll()
             }
         }
+        // ⭐⭐ 会话峰值一刷新就重渲：以前只靠上面两条数据流，峰值更新与
+        //    悬浮渲染的先后顺序不保证，Max压差/Max电流等会慢一帧甚至冻结。
+        scope.launch {
+            app.sessionTracker.peakRevisionFlow.collect { renderAll() }
+        }
     }
 
     /**
      * 布局重建（开关/排序/字号变化时）：
-     * ⭐ 电量行独占一行（重要信息突出），**其余项目两两一行**（用户要求：
-     * 从胎压开始两个项目放一行），每行两个 TextView 各 weight=1 左右分布。
-     * 数据无效的 TextView 用 INVISIBLE 占位（保住同行另一项的位置），
-     * 整行两项都无效时该行高度塌陷为 0。
-     */
-    /**
-     * 布局重建（开关/排序/字号变化时）：
-     * ⭐ 悬浮框每**两个项目**放一行（用户要求），行内两个 TextView 各 weight=1
-     * 左右分布（中间自然隔开）。数据无效 → INVISIBLE 占位（保住同行另一项位置），
-     * 整行两项都无效时行高塌陷为 0。
+     * ⭐ **每个项目独占一行**（用户要求），行宽撑满、文字左对齐。
+     * 数据无效也保持这一行（写「标签  --」占位），行数恒定不跳动。
      */
     private fun applyOrderAndVisibility() {
         val root = rootView ?: return
@@ -280,22 +281,29 @@ class TpmsOverlayService : android.app.Service() {
         root.removeAllViews()
         val shown = OverlayItems.ordered(prefs).filter { it.getShow(prefs) }
 
-        shown.chunked(2).forEach { pair ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            pair.forEach { def ->
-                val tv = rowViews[def.key] ?: return@forEach
-                (tv.parent as? ViewGroup)?.removeView(tv)
-                tv.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)].toFloat()
-                tv.visibility = View.VISIBLE
-                row.addView(tv)
+        shown.forEach { def ->
+            val tv = rowViews[def.key] ?: return@forEach
+            (tv.parent as? ViewGroup)?.removeView(tv)
+            // ⭐ WRAP_CONTENT：悬浮框宽度随内容走，绝不意外撑满整屏
+            tv.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)].toFloat()
+            tv.visibility = View.VISIBLE
+            if (def.key == KEY_SPACE) {
+                // 空白占位：不含任何文字/单位；字号档位复用为留白高度
+                tv.text = " "
+                tv.textSize = sizeSp[def.getSize(prefs).coerceIn(0, 2)] * 0.6f
+                tv.setTextColor(themeTextColor)
             }
-            root.addView(row)
+            root.addView(tv)
         }
 
-        // 空态占位行（放最后）
+        // 空态占位行（放最后，现已恒隐：行都常驻，不再需要「等待数据…」）
         tvWaiting?.let { w ->
             (w.parent as? ViewGroup)?.removeView(w)
+            w.visibility = View.GONE
             root.addView(w)
         }
         updateRootVisibility()
@@ -326,27 +334,27 @@ class TpmsOverlayService : android.app.Service() {
     private fun updateRootVisibility() {
         val root = rootView ?: return
         val prefs = (application as YybmsApp).prefs
-        val anySwitchOn = prefs.overlayShowTpms || prefs.overlayShowVolts ||
-            prefs.overlayShowAmps || prefs.overlayShowPower ||
-            prefs.overlayShowDiffLive || prefs.overlayShowDiffMax ||
-            prefs.overlayShowBattery || prefs.overlayShowMosTemp ||
-            prefs.overlayShowMaxSpeed || prefs.overlayShowTpmsFront ||
-            prefs.overlayShowTpmsRear || prefs.overlayShowAmpsLive ||
-            prefs.overlayShowPowerLive
-        val anyRowVisible = rowViews.values.any { it.visibility == View.VISIBLE }
-        // ⭐ 临时隐藏优先（其他界面长按触发，回本 APP 自动恢复）
+        // ⭐ 直接用注册表算：旧版手抄 12 个开关，每加一个项目都要记得补，
+        //    漏一个就会出现「开关开了但整框不显示」。
+        val anySwitchOn = OverlayItems.ordered(prefs).any { it.getShow(prefs) }
         if (tempHidden) {
             root.visibility = View.INVISIBLE
             tvWaiting?.visibility = View.GONE
             return
         }
         root.visibility = if (anySwitchOn) View.VISIBLE else View.INVISIBLE
-        tvWaiting?.visibility = if (anySwitchOn && !anyRowVisible) View.VISIBLE else View.GONE
+        // 行全部常驻（无数据也写 --），不再需要「等待数据…」占位
+        tvWaiting?.visibility = View.GONE
     }
 
     // ==================== 渲染 ====================
 
     private fun renderAll() {
+        // ⭐ 空白占位行恒为一条空白，任何数据渲染都不碰它
+        rowViews[KEY_SPACE]?.let { tv ->
+            tv.text = " "
+            tv.visibility = View.VISIBLE
+        }
         renderTpmsFront(latestTpms)
         renderTpmsRear(latestTpms)
         renderSoc(latestRealtime)
@@ -354,7 +362,25 @@ class TpmsOverlayService : android.app.Service() {
         updateRootVisibility()
     }
 
-    /** 胎压行渲染公共：pos=前/后；label 固定「前轮/后轮」，格式「前轮 1.24」 */
+    /**
+     * ⭐ **行恒显**：有值写「标签  值」，无值写「标签  --」，
+     * 绝不 GONE。以前无数据/为 0 就隐藏，悬浮框高度忽大忽小、
+     * 开着的项目还会整行消失（用户要求「不要隐藏」）。
+     */
+    private fun showRow(tv: TextView, label: String, value: String?, alarm: Boolean = false) {
+        tv.text = if (value == null) "$label  --" else "$label  $value"
+        tv.setTextColor(
+            if (value != null && alarm) getColor(R.color.abnormal) else themeTextColor
+        )
+        tv.visibility = View.VISIBLE
+    }
+
+    /** 按 key 写一行（该 key 的行不在布局里时自然跳过） */
+    private fun row(key: String, label: String, value: String?, alarm: Boolean = false) {
+        rowViews[key]?.let { showRow(it, label, value, alarm) }
+    }
+
+    /** 胎压行：标签「前轮/后轮」，**不带 Bar 单位**，标签与数值之间留双空格 */
     private fun renderTpmsHalf(st: TpmsMonitor.UiState?, pos: Int, tv: TextView) {
         val prefs = (application as YybmsApp).prefs
         val label = getString(
@@ -363,154 +389,79 @@ class TpmsOverlayService : android.app.Service() {
         val sn = if (pos == TpmsMonitor.POS_FRONT) prefs.tpmsFrontSn else prefs.tpmsRearSn
         val r = sn?.let { st?.readings?.get(it) }
         if (r == null) {
-            tv.visibility = View.GONE
+            showRow(tv, label, null)
             return
         }
-        val alarm = r.bar < prefs.tpmsLowBar || r.bar > prefs.tpmsHighBar
         val v = String.format(java.util.Locale.US, "%.2f", r.bar)
-        tv.text = "$label ${v}Bar"
-        tv.setTextColor(if (alarm) getColor(R.color.abnormal) else themeTextColor)
-        tv.visibility = View.VISIBLE
+        val alarm = r.bar < prefs.tpmsLowBar || r.bar > prefs.tpmsHighBar
+        showRow(tv, label, v, alarm)
     }
 
     private fun renderTpmsFront(st: TpmsMonitor.UiState?) {
         val tv = rowViews["tpmsf"] ?: return
-        if ((application as YybmsApp).prefs.overlayShowTpmsFront) renderTpmsHalf(st, TpmsMonitor.POS_FRONT, tv)
+        if ((application as YybmsApp).prefs.overlayShowTpmsFront)
+            renderTpmsHalf(st, TpmsMonitor.POS_FRONT, tv)
     }
 
     private fun renderTpmsRear(st: TpmsMonitor.UiState?) {
         val tv = rowViews["tpmsr"] ?: return
-        if ((application as YybmsApp).prefs.overlayShowTpmsRear) renderTpmsHalf(st, TpmsMonitor.POS_REAR, tv)
+        if ((application as YybmsApp).prefs.overlayShowTpmsRear)
+            renderTpmsHalf(st, TpmsMonitor.POS_REAR, tv)
     }
 
-    /**
-     * 电量行：**锂电池 SOC**（用户澄清：不是胎压传感器电池）。
-     * 数据源 BMS 实时帧 soc（%）；<20% 标红；BMS 无数据帧时整行隐藏。
-     */
+    /** 电量行：锂电池 SOC（不是胎压传感器电池）；<20% 标红 */
     private fun renderSoc(d: BmsRealtimeData?) {
-        val tv = rowViews["battery"] ?: return
         val prefs = (application as YybmsApp).prefs
         if (!prefs.overlayShowBattery) return
-        // BMS 没连（总压 0）时 soc 无意义，整行隐藏
+        val label = displayLabel("battery")
         if (d == null || d.totalVoltage <= 0f) {
-            tv.visibility = View.GONE
+            row("battery", label, null)
             return
         }
         val soc = d.soc.toInt()
-        val low = soc < 20
-        tv.text = displayLabel("battery") + " " +
-            String.format(java.util.Locale.US, "%d %%", soc)
-        tv.setTextColor(if (low) getColor(R.color.abnormal) else themeTextColor)
-        tv.visibility = View.VISIBLE
+        row("battery", label, String.format(java.util.Locale.US, "%d %%", soc), soc < 20)
     }
 
-    /** 电压/电流/功率/实时压差/最大压差各行（BMS 实时帧 + 会话峰值） */
+    /** 电压/电流/功率/实时压差/会话峰值各行（BMS 实时帧 + 会话峰值） */
     private fun renderRealtime(d: BmsRealtimeData?) {
-        tvVoltsView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowVolts) return@let
-            val v = d?.totalVoltage ?: 0f
-            if (v > 0f) {
-                t.text = displayLabel("volts") + " " +
-                    String.format(java.util.Locale.US, "%.1f V", v)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        // ⭐ 实时电流/实时功率 = 当前帧瞬时值（区别于会话峰值的最大电流/峰值功率）
-        tvAmpsLiveView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowAmpsLive) return@let
-            val cur = d?.totalCurrent ?: 0f
-            if (kotlin.math.abs(cur) > 0.05f) {
-                t.text = displayLabel("ampslive") + " " +
-                    String.format(java.util.Locale.US, "%.1f A", cur)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        tvPowerLiveView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowPowerLive) return@let
-            val p = d?.power ?: 0f
-            if (kotlin.math.abs(p) > 0.5f) {
-                t.text = displayLabel("powerlive") + " " +
-                    String.format(java.util.Locale.US, "%.0f W", p)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        // ⭐ 最大电流/峰值功率 = 会话峰值（峰值记录同源，与实时页口径一致）
-        val peakAmps = (application as YybmsApp).sessionTracker
-            .peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_CURRENT]?.value ?: 0f
-        tvAmpsView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowAmps) return@let
-            if (peakAmps > 0.05f) {
-                t.text = displayLabel("amps") + " " +
-                    String.format(java.util.Locale.US, "%.1f A", peakAmps)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        val peakPower = (application as YybmsApp).sessionTracker
-            .peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_POWER]?.value ?: 0f
-        tvPowerView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowPower) return@let
-            if (kotlin.math.abs(peakPower) > 0.5f) {
-                t.text = displayLabel("power") + " " +
-                    String.format(java.util.Locale.US, "%.0f W", peakPower)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        // ⭐ 最大速度 = 会话峰值（跨会话持久恢复）
-        tvMaxSpeedView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowMaxSpeed) return@let
-            val ms = (application as YybmsApp).sessionTracker.maxSpeed
-            if (ms > 0) {
-                t.text = displayLabel("maxspeed") + " " +
-                    String.format(java.util.Locale.US, "%d km/h", ms)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        tvMosTempView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowMosTemp) return@let
-            val mt = d?.mosTemp
-            if (mt != null) {
-                t.text = getString(R.string.overlay_item_mos_temp) + " " +
-                    String.format(java.util.Locale.US, "%.1f ℃", mt)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        tvDiffLiveView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowDiffLive) return@let
-            val diff = d?.cellDiff ?: 0f
-            if (diff > 0f) {
-                t.text = displayLabel("difflive") + " " +
-                    String.format(java.util.Locale.US, "%.0f mV", diff)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
-        tvDiffMaxView()?.let { t ->
-            if (!(application as YybmsApp).prefs.overlayShowDiffMax) return@let
-            val maxDiff = (application as YybmsApp).sessionTracker
-                .peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_DIFF]?.value ?: 0f
-            if (maxDiff > 0f) {
-                t.text = displayLabel("diffmax") + " " +
-                    String.format(java.util.Locale.US, "%.0f mV", maxDiff)
-                t.visibility = View.VISIBLE
-            } else {
-                t.visibility = View.GONE
-            }
-        }
+        val app = application as YybmsApp
+        val prefs = app.prefs
+        val tracker = app.sessionTracker
+        fun f(v: Float, pat: String) = String.format(java.util.Locale.US, pat, v)
+
+        if (prefs.overlayShowVolts)
+            row("volts", displayLabel("volts"),
+                d?.totalVoltage?.takeIf { it > 0f }?.let { f(it, "%.1f V") })
+        // ⭐ 实时电流 / 实时功率 = 当前帧瞬时值
+        if (prefs.overlayShowAmpsLive)
+            row("ampslive", displayLabel("ampslive"),
+                d?.totalCurrent?.takeIf { kotlin.math.abs(it) > 0.05f }?.let { f(it, "%.1f A") })
+        if (prefs.overlayShowPowerLive)
+            row("powerlive", displayLabel("powerlive"),
+                d?.power?.takeIf { kotlin.math.abs(it) > 0.5f }?.let { f(it, "%.0f W") })
+        // ⭐ 会话峰值（由 YybmsApp 应用级采集器逐帧喂入，退后台也不停）
+        if (prefs.overlayShowAmps)
+            row("amps", displayLabel("amps"),
+                tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_CURRENT]
+                    ?.value?.takeIf { it > 0.05f }?.let { f(it, "%.1f A") })
+        if (prefs.overlayShowPower)
+            row("power", displayLabel("power"),
+                tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_POWER]
+                    ?.value?.takeIf { kotlin.math.abs(it) > 0.5f }?.let { f(it, "%.0f W") })
+        if (prefs.overlayShowMaxSpeed)
+            row("maxspeed", displayLabel("maxspeed"),
+                tracker.maxSpeed.takeIf { it > 0 }
+                    ?.let { String.format(java.util.Locale.US, "%d km/h", it) })
+        if (prefs.overlayShowMosTemp)
+            row("mostemp", getString(R.string.overlay_item_mos_temp),
+                d?.mosTemp?.let { f(it, "%.1f ℃") })
+        if (prefs.overlayShowDiffLive)
+            row("difflive", displayLabel("difflive"),
+                d?.cellDiff?.takeIf { it > 0f }?.let { f(it, "%.0f mV") })
+        if (prefs.overlayShowDiffMax)
+            row("diffmax", displayLabel("diffmax"),
+                tracker.peakRecords[io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.CARD_DIFF]
+                    ?.value?.takeIf { it > 0f }?.let { f(it, "%.0f mV") })
     }
 
     private fun tvVoltsView(): TextView? = rowViews["volts"]

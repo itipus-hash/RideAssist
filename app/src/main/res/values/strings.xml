@@ -86,6 +86,8 @@
     <!--均衡中时显示具体串号，数据来自 165B 帧 bArr[118..121] 逐串位 -->
     <string name="balance_on_cells">均衡：第 %1$s 串均衡中</string>
     <string name="balance_off">均衡：关闭</string>
+    <!-- 异常状态只显示两字，具体告警项点击后浮出 -->
+    <string name="state_abnormal_word">异常</string>
 
     <!-- 图例 -->
     <string name="legend_soc">SOC</string>
@@ -154,6 +156,8 @@
     <string name="overlay_item_diff_live">实时压差</string>
     <string name="overlay_item_diff_max">最大压差</string>
     <string name="overlay_item_mos_temp">MOS温度</string>
+    <string name="overlay_item_space">空格占位</string>
+    <string name="overlay_display_space">空格占位</string>
     <string name="overlay_open_nav">打开导航软件</string>
     <string name="overlay_quick_nav">+快捷导航</string>
     <string name="quick_nav_value_hint">地点 / 坐标 / 链接（可选）</string>

@@ -2,6 +2,10 @@ package io.github.supit.rideassist.ui.realtime
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.ArrayDeque
 
 /**
@@ -96,9 +100,21 @@ class SessionSpeedTracker : ViewModel() {
      * 永远不会 emit（踩过这个坑：ArrayDeque 同理）。
      * 计数变化是明确的信号，简单可靠。
      */
+    private val _peakRevision = MutableStateFlow(0L)
+
+    /** ⭐ 峰值版本号做成 Flow：悬浮窗订阅它，峰值一变立刻重渲（不再慢一帧） */
+    val peakRevisionFlow: StateFlow<Long> = _peakRevision.asStateFlow()
+
+    /** 供骑行页做「跳过无变化重绘」的同步读取 */
+    val peakRevision: Long get() = _peakRevision.value
+
+    /**
+     * ⭐ 最近一次 GPS 低通速度（km/h，未取整），由实时页喂入。
+     * 应用级采集器在**退后台**（实时页 onPause 会停 GPS）后读它做
+     * MoveGate 的第三路证据；置 null = 无速度信号，判据只走电流/功率。
+     */
     @Volatile
-    var peakRevision: Long = 0L
-        private set
+    var liveSpeedKmh: Float? = null
 
     // ==================== 骑行统计（骑行页） ====================
 
@@ -712,7 +728,7 @@ class SessionSpeedTracker : ViewModel() {
         } else {
             PeakRecord(value = value, clock = clock)
         }
-        peakRevision++
+        _peakRevision.update { it + 1 }
         return true
     }
 
@@ -953,7 +969,7 @@ class SessionSpeedTracker : ViewModel() {
         lastDischargeWallMs = 0L
         diffPoints.clear()
         java.util.Arrays.fill(peakRecords, null)
-        peakRevision++
+        _peakRevision.update { it + 1 }
     }
 
     companion object {

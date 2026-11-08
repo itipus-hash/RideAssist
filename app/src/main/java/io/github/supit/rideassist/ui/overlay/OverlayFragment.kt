@@ -97,7 +97,9 @@ class OverlayFragment : Fragment() {
             prefs,
             onUiChanged = { restartIfRunning() },
         )
-        b.recyclerOverlayItems.layoutManager = androidx.recyclerview.widget.GridLayoutManager(requireContext(), 2)
+        // ⭐ 悬浮项目开关改成「一行一个」（原来 2 列挤一行），仍由
+        //    ItemTouchHelper 长按拖动排序，顺序保存口径不变。
+        b.recyclerOverlayItems.layoutManager = LinearLayoutManager(requireContext())
 
         // ⭐ 背景透明度滑条：拖动实时预览（bgAlphaListener 直达已运行的服务）
         // ⭐ 初始值与存储同步（否则滑条显示 XML 默认 70，与实际不同步）
@@ -115,7 +117,9 @@ class OverlayFragment : Fragment() {
             prefs.overlayJumpOnNav = checked
         }
 
-        // ⭐ 悬浮项目折叠（默认收起，点击展开/收起）
+        // ⭐ 悬浮项目默认**展开**（用户要求「不要隐藏」），点击表头仍可收起
+        b.recyclerOverlayItems.visibility = View.VISIBLE
+        b.tvArrow.text = "▾"
         b.headerItems.setOnClickListener {
             val show = b.recyclerOverlayItems.visibility == View.GONE
             b.recyclerOverlayItems.visibility = if (show) View.VISIBLE else View.GONE

@@ -69,6 +69,12 @@ object OverlayItems {
             R.string.overlay_display_diff_max,
             { it.overlayShowDiffMax }, { p, v -> p.overlayShowDiffMax = v },
             { it.overlaySizeDiffMax }, { p, v -> p.overlaySizeDiffMax = v }),
+        // ⭐ 空白占位：开启后悬浮框多一条空白行，用来把信息分组隔开。
+        //    字号档位在这里复用为「空白行高度」，不显示任何文字。
+        Def("space", R.string.overlay_item_space,
+            R.string.overlay_display_space,
+            { it.overlayShowSpace }, { p, v -> p.overlayShowSpace = v },
+            { it.overlaySizeSpace }, { p, v -> p.overlaySizeSpace = v }),
     )
 
     /** 按 prefs 里的排序串返回有序项目（未入列的按注册顺序补在尾部） */

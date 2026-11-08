@@ -693,6 +693,9 @@ class RealtimeFragment : Fragment(), LocationListener {
     override fun onPause() {
         super.onPause()
         stopGpsUpdates()
+        // ⭐ 退后台后 GPS 停供，速度证据必须标为「无」，
+        //    否则应用级采集器会拿一个陈旧速度继续判定在动。
+        tracker.liveSpeedKmh = null
         stopRealtimeClock()
     }
 
@@ -761,6 +764,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         b.tvSpeedNowUnit.text = ""
         // ⭐ 无GPS 数据源 = 没有速度信号 → 曲线不画（塞 0 会出现贴底横线）
         hasSpeedSignal = false
+        tracker.liveSpeedKmh = null
         // 无条件调用，队列非空时它会清空并重绘
         pushSpeedSample(0)
         applySpeedMax()
@@ -874,6 +878,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         // 指数低通：alpha 越小越平滑
         filteredSpeed = if (filteredSpeed == null) kmh
         else (filteredSpeed!! + (kmh - filteredSpeed!!) * SMOOTH_ALPHA)
+        // ⭐ 把低通后的真实速度共享给应用级采集器（MoveGate 第三路证据）
+        tracker.liveSpeedKmh = filteredSpeed
 
         val shown = if (filteredSpeed!! < SPEED_ZERO_THRESHOLD) 0 else filteredSpeed!!.toInt()
 
@@ -1309,20 +1315,15 @@ class RealtimeFragment : Fragment(), LocationListener {
                     )
                     // ⭐ 充电 ETA 用：刷新「末次放电帧」时刻（≥1A 放电才算）
                     tracker.noteDischarge(d.totalCurrent)
-                    // ⭐ 四张卡的「XX 最大值记录」逐帧比对
+                    // ⭐ 速度峰值依赖本页 GPS，仍在这里比对；功率/电流/压差三项
+                    //    已搬到 YybmsApp 的应用级采集器（退后台也不冻结）。
                     updatePeakRecord(CARD_SPEED, filteredSpeed?.toInt()?.toFloat() ?: 0f, d)
-                    updatePeakRecord(CARD_POWER, d.power, d)
-                    updatePeakRecord(CARD_CURRENT, kotlin.math.abs(d.totalCurrent), d)
-                    updatePeakRecord(CARD_DIFF, d.cellDiff, d)
+                    // 峰值被应用级采集器刷新时，本页也要跟着重绘记录卡
+                    renderPeakRecordCard()
 
-                    // ⭐ 骑行统计：先驱动**记录状态机**，再累加统计。
-//顺序很重要 —— accumulateRideStats 内部要读 isRecording。
+                    // ⭐ 骑行统计：状态机由 YybmsApp 统一驱动，本页只做积分
                     val verdict = judgeMoving(d)
                     val moving = verdict.moving
-                    tracker.updateRecordingState(
-                        dischargingNow = moving,
-                        hasDeviceData = true,
-                    )
                     tracker.accumulateRideStats(
                         // ⚠️⚠️ 必须传**真实速度**（低通后的浮点值），不是 `shown`——
                         // `shown` 做了「<5km/h 归零 + 取整」，用那种值积分里程

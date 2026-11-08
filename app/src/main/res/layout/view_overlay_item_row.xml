@@ -7,10 +7,11 @@
 
     <TextView
         android:id="@+id/tv_label"
-        android:layout_width="60dp"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:textColor="@color/text_primary"
-        android:textSize="13sp" />
+        android:textSize="15sp" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_size"
@@ -25,11 +26,6 @@
         android:paddingHorizontal="10dp"
         android:text="@string/overlay_size_mid"
         android:textSize="12sp" />
-
-    <Space
-        android:layout_width="0dp"
-        android:layout_height="1dp"
-        android:layout_weight="1" />
 
     <com.google.android.material.materialswitch.MaterialSwitch
         android:id="@+id/switch_item"

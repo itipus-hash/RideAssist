@@ -181,6 +181,16 @@ class AppPrefs(context: Context) {
         get() = sp.getBoolean("overlay_jump_on_nav", true)
         set(value) = sp.edit { putBoolean("overlay_jump_on_nav", value) }
 
+    /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
+    var overlayShowSpace: Boolean
+        get() = sp.getBoolean("overlay_show_space", false)
+        set(value) = sp.edit { putBoolean("overlay_show_space", value) }
+
+    /** ⭐ 空格占位行高度档位（0=小 1=中 2=大），复用字号按钮 */
+    var overlaySizeSpace: Int
+        get() = sp.getInt("overlay_size_space", 1)
+        set(value) = sp.edit { putInt("overlay_size_space", value) }
+
     /** ⭐ 悬浮项目成对重排的一次性标记 */
     var pairResetDone: Boolean
         get() = sp.getBoolean("overlay_pair_reset_done", false)
