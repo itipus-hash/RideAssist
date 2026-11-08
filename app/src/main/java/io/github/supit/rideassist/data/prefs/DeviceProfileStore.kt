@@ -31,11 +31,15 @@ object DeviceProfileStore {
         val cached = load(cache)
         if (DeviceProfile.isDifferentBoard(cached, fresh)) {
             // ⭐ 换板子：旧板子的阈值对新板子毫无意义，一起作废
+            //    （新 profile 是残缺的也没关系，设备信息帧到齐后下次连接会补全）
             cache.protectParamsRaw = ""
             save(cache, fresh)
             return true
         }
-        if (cached == null || cached.differsFrom(fresh)) save(cache, fresh)
+        // ⭐ 字段级合并：新值缺失（0/-1/空）的字段用旧缓存补上，
+        //    避免设备信息帧分帧到达时把完整缓存抹残
+        val merged = fresh.mergedWith(cached)
+        if (cached == null || cached.differsFrom(merged)) save(cache, merged)
         return false
     }
 }

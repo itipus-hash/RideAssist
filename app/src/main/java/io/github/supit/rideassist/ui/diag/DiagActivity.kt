@@ -200,11 +200,13 @@ class DiagActivity : AppCompatActivity() {
                 // 既没有实时数据、也没有任何阈值来源：如实说"未连接"
                 b.llAlarms.removeAllViews()
                 b.tvAlarms.text = getString(R.string.diag_no_device)
-                b.llIdentity.removeAllViews()
                 return
             }
             // 有缓存阈值：继续往下渲染，实测值列会全是 "-"
-            b.llIdentity.removeAllViews()
+            // ⚠️⚠️ 这里**绝不能** llIdentity.removeAllViews()：
+            //    identity 表由 renderDevice 全权渲染（本函数在它之后执行），
+            //    在这里清空会把刚填好的 15 行全抹掉 ——
+            //    「表格怎么都出不来」的根因就是这行（用户 2026-11-08）
         }
       fillTable(
     container = b.llAlarms,
@@ -232,21 +234,10 @@ class DiagActivity : AppCompatActivity() {
             )
         }
 
-        // ⭐ 设备信息 / 电池信息也走本地缓存：没连保护板时显示上次读到的型号、
-        // 版本、SN、电池类型、串数、额定容量、标称总压
-        val profile = io.github.supit.rideassist.data.prefs.DeviceProfileStore
-            .load(YybmsAppHolder.from(this).deviceCache)
-        // ⚠️ numericFrom 传 1（不是 MAX_VALUE）：否则所有列都按 weight 平分，
-        //    右侧值列被压窄，长型号 `YY-BCU12-MOS-20S150A-MUX` 会折成两行
-        //    （用户反馈「右侧单元格大一点，不然会分行」）。
-        //    传 1 后第二列用 measureText 量出的固定宽度 + 单行不折行。
-        fillTable(
-            b.llIdentity, header = null,
-            rows = if (d.hasDeviceData) d.deviceIdentity()
-            else profile?.identityRows() ?: emptyList(),
-            numericFrom = 1,
-            centerValues = true,
-        )
+        // ⚠️⚠️ 这里**不要再填 llIdentity**：renderDevice 已用「静态 + 动态」15 行
+        //    合并渲染，这里的旧调用会把它覆盖成纯静态 9 行
+        //    （用户 2026-11-08 实测「动态行怎么不在表格里」的根因就是它）。
+        //    profile 的加载也挪到了 renderDevice 调用点。
 
         // 均衡参数：无值时**整卡隐藏**（contentPadding 会留出一个空白格子，
         // 用户 2026-11-08 要求删掉这个没内容的格子）
@@ -289,8 +280,16 @@ class DiagActivity : AppCompatActivity() {
         numericFrom: Int = Int.MAX_VALUE,
         /** 数值列是否居中（默认右对齐；保护板信息这类字符串值居中更好看） */
         centerValues: Boolean = false,
+        /** 值等于这些内容的单元格染成绿色（如均衡「已开启」） */
+        greenValues: Set<String> = emptySet(),
     ) {
         container.removeAllViews()
+        if (rows.isNotEmpty()) {
+            android.util.Log.i(
+                "FillTable",
+                "rows=${rows.size} cols=${rows[0].size} container=${container.id}"
+            )
+        }
         if (rows.isEmpty() && header == null) return
         val cols = maxOf(header?.size ?: 0, rows.maxOfOrNull { it.size } ?: 0)
         if (cols == 0) return
@@ -335,6 +334,9 @@ fun addRow(cells: List<String>, isHeader: Boolean) {
                 centerValues -> android.view.Gravity.CENTER
                 else -> android.view.Gravity.END
             }
+            if (cell in greenValues) {
+                setTextColor(0xFF2E7D32.toInt())   // 深绿：均衡「已开启」
+            }
   if (isHeader) alpha = 0.85f
     // ⭐ 数值列固定宽度 + 不换行 —— 列位由此保证，不会因内容长度而漂移
          if (c >= numericFrom) {
@@ -363,6 +365,10 @@ LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
 
 header?.let { addRow(it, isHeader = true) }
  rows.forEach { addRow(it, isHeader = false) }
+        android.util.Log.i(
+            "FillTable",
+            "added ${rows.size + (if (header != null) 1 else 0)} rows, children=${container.childCount}"
+        )
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -458,7 +464,7 @@ header?.let { addRow(it, isHeader = true) }
         val display = rawTemps.map { it.second?.let { v -> "%.1f℃".format(v) } }
         val hidden = io.github.supit.rideassist.util.TempSlotDedup.hiddenIndices(display)
         val tempText = rawTemps.mapIndexed { i, (label, _) ->
-            if (hidden[i]) null else "$label ${display[i]}"
+            if (hidden[i] || display[i] == null) null else "$label ${display[i]}"
         }.filterNotNull().joinToString("  ")
 
         // ⭐ 温度行放进表格「温度探头」下面（用户要求）
@@ -475,21 +481,36 @@ header?.let { addRow(it, isHeader = true) }
             add(listOf("SOC", "${d.soc.toInt()} %"))
             add(listOf("剩余容量", "%.2f Ah / %.2f Ah".format(d.remainingCapacity, d.ratedCapacity)))
             add(listOf("循环", "${d.cycleCount} 次"))
-            add(listOf("均衡", if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"))
-        }
-        fillTable(b.llIdentity, header = null, rows = rows, numericFrom = 1, centerValues = true)
-
-        b.tvDevice.text = buildString {
-            // ⭐ 动态量用文本（fillTable 的动态行渲染不出来，原因未明，先用已验证有效的方式）
-            appendLine("总压　%.2f V　电流 %.2f A　功率 %.0f W".format(d.totalVoltage, d.totalCurrent, d.power))
-            // ⚠️ 字面百分号必须写 %%，否则 String.format 把它后面的字符当转换符
-            appendLine("SOC　%d %%　剩余 %.2f / %.2f Ah　循环 %d 次".format(d.soc.toInt(), d.remainingCapacity, d.ratedCapacity, d.cycleCount))
-            appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
-            if (tempText.isNotBlank()) appendLine("温度　" + tempText)
-            if (!live && savedAtMs > 0L) {
-                append("（${formatStamp(savedAtMs)} 缓存数据。）")
+            add(
+                listOf(
+                    "均衡状态",
+                    if (d.balanceOn) {
+                        if (d.balancingCells.isEmpty()) "已开启"
+                        else "已开启（第 ${d.balancingCells.joinToString(",")} 串）"
+                    } else "未开启"
+                )
+            )
+            // ⭐ 均衡参数紧跟均衡状态（原来在独立的「均衡参数」卡里，合并进表）
+            if (d.balanceCutoffVolt > 0f) {
+                add(listOf("均衡截止电压", "%.3f V".format(d.balanceCutoffVolt)))
+            }
+            if (d.balanceDiffThreshold > 0f) {
+                add(listOf("均衡压差阈值", "%.1f mV".format(d.balanceDiffThreshold)))
             }
         }
+        fillTable(
+            b.llIdentity, header = null, rows = rows, numericFrom = 1, centerValues = true,
+            greenValues = if (d.balanceOn) setOf(
+                if (d.balancingCells.isEmpty()) "已开启"
+                else "已开启（第 ${d.balancingCells.joinToString(",")} 串）"
+            ) else emptySet(),
+        )
+
+        // ⭐ 动态量已在上方表格里（总压/SOC/循环/均衡/温度），
+        //    这里只放**表格放不下的长文本**：断开标注
+        b.tvDevice.text = if (!live && savedAtMs > 0L) {
+            "（${formatStamp(savedAtMs)} 缓存数据。）"
+        } else ""
     }
 
     private fun fmt(v: Double, d: Int): String = String.format(Locale.US, "%.${d}f", v)

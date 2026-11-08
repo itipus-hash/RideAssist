@@ -30,6 +30,9 @@ data class BatterySnapshot(
     val balanceOn: Boolean = false,
     /** 正在均衡的串号，逗号分隔（空 = 无） */
     val balancingCells: String = "",
+    /** 均衡参数（均衡开启时显示在均衡状态下面） */
+    val balanceCutoffVolt: Float = 0f,
+    val balanceDiffThreshold: Float = 0f,
     val firmware: String = "",
     val savedAtMs: Long = 0L,
 ) {
@@ -65,6 +68,7 @@ data class BatterySnapshot(
         mosTemp?.toString() ?: NAN, temp1?.toString() ?: NAN,
         temp2?.toString() ?: NAN, temp3?.toString() ?: NAN,
         balanceOn.toString(), balancingCells,
+        balanceCutoffVolt.toString(), balanceDiffThreshold.toString(),
         firmware.replace('\t', ' ').replace('\n', ' '),
         savedAtMs.toString(),
     ).joinToString(TAB)
@@ -74,7 +78,7 @@ data class BatterySnapshot(
         private const val NAN = "nan"
 
         /** 编码字段数；**只增不减** */
-        const val FIELD_COUNT = 18
+        const val FIELD_COUNT = 20
 
         fun of(d: BmsRealtimeData, savedAtMs: Long): BatterySnapshot = BatterySnapshot(
             batteryType = d.batteryType,
@@ -93,6 +97,8 @@ data class BatterySnapshot(
             temp3 = d.temp3,
             balanceOn = d.balanceOn,
             balancingCells = d.balancingCells.joinToString(","),
+            balanceCutoffVolt = d.balanceCutoffVolt,
+            balanceDiffThreshold = d.balanceDiffThreshold,
             firmware = d.firmwareVersion,
             savedAtMs = savedAtMs,
         )
@@ -117,8 +123,10 @@ data class BatterySnapshot(
                 temp2 = num(12), temp3 = num(13),
                 balanceOn = f[14] == "true",
                 balancingCells = f[15],
-                firmware = f[16],
-                savedAtMs = f[17].toLongOrNull() ?: 0L,
+                balanceCutoffVolt = f[16].toFloatOrNull() ?: return null,
+                balanceDiffThreshold = f[17].toFloatOrNull() ?: return null,
+                firmware = f[18],
+                savedAtMs = f[19].toLongOrNull() ?: 0L,
             )
         }
     }

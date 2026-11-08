@@ -31,6 +31,29 @@ data class DeviceProfile(
     val savedAtMs: Long = 0L,
 ) {
 
+    /**
+     * ⭐ **字段级合并**：新读到的值若是默认值（0 / -1 / 空），用旧缓存补上。
+     *
+     * 场景：设备信息帧是分帧到达的，连接后第一秒可能只读到型号和串数，
+     * 探头数 / 额定容量 / 休眠时间还没到 —— 这时若直接覆盖缓存，
+     * 就会把之前完整缓存的这几个字段抹成 0（「温度探头」「额定容量」
+     * 「休眠时间」三行随之消失，用户 2026-11-08 实测）。
+     */
+    fun mergedWith(cached: DeviceProfile?): DeviceProfile {
+        val c = cached ?: return this
+        return copy(
+            tempProbeCount = if (tempProbeCount > 0) tempProbeCount else c.tempProbeCount,
+            cellCount = if (cellCount > 0) cellCount else c.cellCount,
+            maxCellNumSupported = if (maxCellNumSupported > 0) maxCellNumSupported
+            else c.maxCellNumSupported,
+            batteryType = if (batteryType >= 0) batteryType else c.batteryType,
+            ratedCapacity = if (ratedCapacity > 0f) ratedCapacity else c.ratedCapacity,
+            sleepTimeSec = if (sleepTimeSec > 0) sleepTimeSec else c.sleepTimeSec,
+            firmwareVersion = firmwareVersion.takeIf { it.isNotBlank() && it != "--" }
+                ?: c.firmwareVersion,
+        )
+    }
+
     /** 仅比较内容（忽略保存时间） */
     fun differsFrom(other: DeviceProfile): Boolean =
         productName != other.productName ||
