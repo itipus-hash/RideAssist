@@ -195,19 +195,12 @@ class MonitorFragment : Fragment() {
                     val v2 = layoutInflater.inflate(io.github.supit.rideassist.R.layout.dialog_update, null)
                     v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_title)
                         .text = "发现新版本 v${info.version}"
-                    // ⭐ 跨多版本更新：列出所有比当前版本新的版本段（1. / 2. / 3. 分块）
-                    val newer = info.history.filter {
-                        io.github.supit.rideassist.core.update.UpdateChecker.compareVersions(it.version, current) > 0
-                    }.sortedByDescending {
-                        io.github.supit.rideassist.core.update.UpdateChecker.compareVersions(it.version, current)
-                    }
-                    val msg = if (newer.isEmpty()) {
-                        (info.notes.ifBlank { "问题修复与体验优化" })
-                    } else {
-                        newer.joinToString("\n\n") { h -> "v${h.version}\n${h.notes.ifBlank { "问题修复与体验优化" }}" }
-                    }
+                    // ⭐⭐ 跨多版本**不再全列**：旧实现把所有比本机新的版本段都拼进去，
+                    // 从 1.0.1 直接升到 1.0.10 时正文有 69 行，弹窗撑破屏幕。
+                    // 现在只展开最新版本说明，旧版本压成一行摘要
+                    // （规则在 UpdateNotes，纯函数 + 单测）。
                     v2.findViewById<android.widget.TextView>(io.github.supit.rideassist.R.id.tv_update_msg)
-                        .text = "$msg\n\n当前版本 v$current"
+                        .text = io.github.supit.rideassist.core.update.UpdateNotes.build(info, current)
                     val dlg = com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
                         .setView(v2)
                         .create()

@@ -17,14 +17,24 @@
         android:textStyle="bold"
         android:textColor="?attr/colorOnSurface" />
 
-    <TextView
-        android:id="@+id/tv_update_msg"
+    <!-- ⭐ 正文必须包 ScrollView：
+         说明文字是动态内容，即使已经只展开最新版本，也可能出现超长单条。
+         裸 TextView 会直接把弹窗撑高、把下面 4 个按钮挤出屏幕。 -->
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:textSize="14sp"
-        android:lineSpacingExtra="3dp"
-        android:textColor="?attr/colorOnSurfaceVariant" />
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/tv_update_msg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:lineSpacingExtra="3dp"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+    </ScrollView>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_update"
