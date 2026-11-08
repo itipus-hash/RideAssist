@@ -10,7 +10,7 @@ package io.github.supit.rideassist.util
  * 每个订阅源各自持有一个 [Filter] 实例（低通状态不能共享，否则同一帧
  * 被两个回调各算一次会打乱序列）；口径常量则只有这一处。
  *
- * ## ⭐⭐ 运动门控（2026-11-09 重做）
+ * ## ⭐⭐ 运动门控（2026-11-08 重做）
  *
  * 「是否允许把 GPS 速度当真」由 [MotionLatch] 决定，状态只在
  * `SessionSpeedTracker`（Application 级单例）里存一份。
