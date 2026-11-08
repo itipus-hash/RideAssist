@@ -76,7 +76,7 @@ class DeviceProfileTest {
     @Test fun `缓存能生成设备信息行`() {
         val rows = sample().identityRows()
         val map = rows.associate { it[0] to it[1] }
-        assertEquals("YY-BCU12-MOS-20S150A-MUX", map["型号"])
+        assertEquals("YY-BCU12-MOS-20S150A-MUX", map["保护板型号"])
         assertEquals("1.43", map["版本"])
         assertEquals("SN123456", map["SN"])
         assertEquals("铁锂", map["电池类型"])

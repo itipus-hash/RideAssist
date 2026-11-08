@@ -445,15 +445,19 @@ header?.let { addRow(it, isHeader = true) }
             appendLine("SOC　${d.soc.toInt()} %　剩余 ${fmt(d.remainingCapacity.toDouble(), 2)} Ah" +
                 " / ${fmt(d.ratedCapacity.toDouble(), 2)} Ah")
             appendLine("循环　${d.cycleCount} 次")
-            // ⭐ 与首页温度槽位**同一规则**（MonitorFragment）：探头路数决定显示几个，
-            //    T3/T4 在 2 路机型上是别的数据，按「有没有读数」显示会冒出垃圾值
+            // ⭐ 与首页温度槽位**同一套规则**：
+            // 1. 探头路数决定显示几个槽位（T3/T4 在 2 路机型上是填充数据）
+            // 2. **同值合并**（TempSlotDedup）：T1==T2 只显示 T1，MOS 不参与
             val probeCount = d.tempProbeCount
-            val temps = buildList {
-                d.mosTemp?.let { add("MOS %.1f℃".format(it)) }
+            val rawTemps = buildList {
+                add(d.mosTemp?.let { "MOS %.1f℃".format(it) })
                 if (probeCount >= 1) d.temp1?.let { add("T1 %.1f℃".format(it)) }
                 if (probeCount >= 2) d.temp2?.let { add("T2 %.1f℃".format(it)) }
                 if (probeCount >= 3) d.temp3?.let { add("T4 %.1f℃".format(it)) }
             }
+            val hidden = io.github.supit.rideassist.util.TempSlotDedup
+                .hiddenIndices(rawTemps)
+            val temps = rawTemps.mapIndexed { i, v -> if (hidden[i]) null else v }.filterNotNull()
             appendLine("温度　${if (temps.isEmpty()) "无探头" else temps.joinToString("  ")}")
             appendLine("均衡　${if (d.balanceOn) "第 ${d.balancingCells.joinToString(",")} 串" else "未开启"}")
             if (!live && savedAtMs > 0L) {

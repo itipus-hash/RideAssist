@@ -59,7 +59,7 @@ data class DeviceProfile(
     fun identityRows(): List<List<String>> {
         val rows = mutableListOf<Pair<String, String>>()
         fun row(label: String, value: String) { rows.add(label to value) }
-        if (productName.isNotEmpty()) row("型号", productName)
+        if (productName.isNotEmpty()) row("保护板型号", productName)
         if (firmwareVersion.isNotEmpty() && firmwareVersion != "--") row("版本", firmwareVersion)
         if (serialNumber.isNotEmpty()) row("SN", serialNumber)
         if (batteryType >= 0) row("电池类型", batteryTypeName(batteryType))
