@@ -172,6 +172,10 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginTop">12dp</item>
         <item name="android:padding">14dp</item>
+        <!-- ⚠️ 圆角必须收小：默认圆角太大时，卡片内的第一列文字（如「告警项」
+             「保护板信息」）正好压在弧线上，看着像被切掉 / 挤在一起（用户反馈）。
+             10dp 既有圆角感，又不会吃掉内容区。 -->
+        <item name="cardCornerRadius">10dp</item>
     </style>
 
 <!--
@@ -201,6 +205,9 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:orientation">vertical</item>
+        <!-- 给表格左右各留一点余量，内容不贴卡片边框（配合 cardCornerRadius） -->
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
     </style>
 
     <!-- 隐形表格的单元格：字体必须与 DiagText 一致，否则行高会跳 -->
