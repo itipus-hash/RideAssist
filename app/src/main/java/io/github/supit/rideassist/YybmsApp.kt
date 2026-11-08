@@ -108,6 +108,17 @@ class YybmsApp : Application() {
                 tracker.updatePeak(T.CARD_POWER, d.power, d)
                 tracker.updatePeak(T.CARD_CURRENT, abs(d.totalCurrent), d)
                 tracker.updatePeak(T.CARD_DIFF, d.cellDiff, d)
+
+                // ⭐⭐ **速度卡峰值快照也必须在这一层比对**（用户要求：悬浮/退后台期间
+                //    APP 本体也要持续记录极速与最大压差，回来能查到）。
+                // 以前它留在 RealtimeFragment 的 STARTED 作用域里，切到导航后
+                // Fragment STOPPED → 「最大速度 XX @ 时间」记录卡整段冻结。
+                // 速度证据取 tracker.liveSpeedKmh：APP 前台由实时页写、退后台由
+                // 悬浮前台服务写，两处都是 SpeedDisplay 同一口径。
+                // ⚠️ 只对「有速度信号」的帧比对；取整数与页面水印/曲线口径一致。
+                tracker.liveSpeedKmh?.let { v ->
+                    tracker.updatePeak(T.CARD_SPEED, v.toInt().toFloat(), d)
+                }
             }
         }
     }

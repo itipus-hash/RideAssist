@@ -1022,25 +1022,9 @@ class RealtimeFragment : Fragment(), LocationListener {
      */
     // ==================== XX 最大值记录（四张卡通用） ====================
 
-    /**
-     * 每帧比对各卡的数值，**只有超过历史最大值**才刷新对应快照。
-     *
-     * ⭐ 状态存在 Activity 作用域的 [tracker] 里（新**骑行页**也要读同一份数据），
-     *    这里只负责「喂数据 + 刷 UI」。
-     *
-     * @param index 卡片索引（0=速度 1=功率 2=电流 3=压差）
-     * @param value 该卡此刻的数值
-     */
-    private fun updatePeakRecord(
-        index: Int,
-        value: Float,
-        d: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData,
-    ) {
-        // ⚠️ **静止时不更新**：静止时单体电压/功率的微小波动会产生虚假峰值，
-        //   记录下来反而误导（与「静止时不画曲线」同一判据）。
-        if (!shouldTrackGpsLoss()) return
-        if (tracker.updatePeak(index, value, d)) renderPeakRecordCard()
-    }
+    // ⭐⭐ 四项峰值快照（含速度）统一由 YybmsApp 的应用级采集器喂入，
+    // 本页不再逐帧比对 —— 喂数点挂在 Fragment 上会随 STARTED 作用域一起停，
+    // 切到导航后记录就冻结了。这里只负责把 tracker 里的快照渲染成记录卡。
 
     /** 当前时刻 HH:mm（峰值记录用） */
     private fun nowClockText(): String =
@@ -1313,9 +1297,10 @@ class RealtimeFragment : Fragment(), LocationListener {
                     )
                     // ⭐ 充电 ETA 用：刷新「末次放电帧」时刻（≥1A 放电才算）
                     tracker.noteDischarge(d.totalCurrent)
-                    // ⭐ 速度峰值依赖本页 GPS，仍在这里比对；功率/电流/压差三项
-                    //    已搬到 YybmsApp 的应用级采集器（退后台也不冻结）。
-                    updatePeakRecord(CARD_SPEED, speedFilter.realSpeed?.toInt()?.toFloat() ?: 0f, d)
+                    // ⭐⭐ 速度峰值快照已上移到 YybmsApp 的应用级采集器，
+                    //    与功率/电流/压差三项同层级：用 tracker.liveSpeedKmh 做速度证据
+                    //    （前台本页写、退后台悬浮前台服务写）。以前只在这里比对，
+                    //    切到导航后 Fragment STOPPED → 「最大速度 @ 时间」记录卡冻结。
                     // 峰值被应用级采集器刷新时，本页也要跟着重绘记录卡
                     renderPeakRecordCard()
 
@@ -1488,7 +1473,11 @@ class RealtimeFragment : Fragment(), LocationListener {
      */
     private fun applySpeedMax() {
         val b = _binding ?: return
-        if (tracker.speedPoints.isEmpty() || tracker.maxSpeed <= 0) {
+        // ⭐⭐ 只看 maxSpeed，**不再要求 speedPoints 非空**：
+        //    曲线采样仍留在本页（退后台不采样），但会话极速由悬浮前台服务
+        //    照样在记。若继续依赖曲线点，全程在导航里骑完再回来看会出现
+        //    「明明有极速，速度卡 Max 却是空的」。
+        if (tracker.maxSpeed <= 0) {
             b.tvGpsMax.text = ""
             // ⚠️⚠️ **必须用 INVISIBLE，不能用 GONE**。
             // 标题行是 wrap_content，高度由最高的子控件决定；
