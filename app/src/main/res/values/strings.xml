@@ -97,7 +97,7 @@
     <!-- 快照 -->
 
     <!-- 设置 -->
-    <string name="setting_auto_connect">启动APP自动连接上次保护板</string>
+    <string name="setting_auto_connect">自动连接上次保护板</string>
     <string name="setting_auto_connect_desc">后台尝试连接已保存设备，失败不打扰</string>
     <string name="setting_vibrate">告警震动提醒</string>
     <string name="setting_vibrate_desc">BMS 触发告警时震动</string>
