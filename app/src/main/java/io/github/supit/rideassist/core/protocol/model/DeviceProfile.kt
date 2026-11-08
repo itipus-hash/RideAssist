@@ -83,7 +83,7 @@ data class DeviceProfile(
         val rows = mutableListOf<Pair<String, String>>()
         fun row(label: String, value: String) { rows.add(label to value) }
         if (productName.isNotEmpty()) row("保护板型号", productName)
-        if (firmwareVersion.isNotEmpty() && firmwareVersion != "--") row("版本", firmwareVersion)
+        if (firmwareVersion.isNotEmpty() && firmwareVersion != "--") row("软件版本", firmwareVersion)
         if (serialNumber.isNotEmpty()) row("SN", serialNumber)
         if (batteryType >= 0) row("电芯类型", batteryTypeName(batteryType))
         // ⭐ 「电芯数量」一行（用户 2026-11-09）：17串/20串(最大支持)

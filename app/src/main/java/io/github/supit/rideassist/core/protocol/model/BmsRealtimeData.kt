@@ -728,7 +728,7 @@ fun deviceIdentity(): List<List<String>> {
      val rows = mutableListOf<Pair<String, String>>()
         fun row(label: String, value: String) { rows.add(label to value) }
         if (productName.isNotEmpty()) row("保护板型号", productName)
-   if (firmwareVersion != "--") row("版本", firmwareVersion)
+   if (firmwareVersion != "--") row("软件版本", firmwareVersion)
    if (serialNumber.isNotEmpty()) row("SN", serialNumber)
    if (batteryType >= 0) row("电芯类型", batteryTypeName)
         // ⭐ 「电芯数量」一行（与 DeviceProfile.identityRows 同口径）：
