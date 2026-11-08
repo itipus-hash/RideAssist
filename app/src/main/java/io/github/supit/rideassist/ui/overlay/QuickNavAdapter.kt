@@ -145,25 +145,26 @@ class QuickNavAdapter(
     var editCallback: ((Int) -> Unit)? = null
 
     companion object {
+        /**
+         * 读取快捷导航条目 —— **只认 {value,label} 两个字段**。
+         *
+         * ⚠️ 历史上有过三代格式（{value,label} / {dest,label,uri} / {name,uri}），
+         *    读取时的兼容分支会把 value / label 写颠倒（用户 2026-11-09 实测踩过）。
+         *    现在历史数据已由 `tools/migrate_quick_nav.py` 一次性迁成新格式，
+         *    代码里**不再保留任何历史格式的兼容逻辑**。
+         *
+         * - value：链接 / 地名 / 坐标（"含 ://" 判定为直达链接）
+         * - label：按钮显示名（空则显示 value）
+         */
         fun readEntries(prefs: AppPrefs): MutableList<Entry> {
             val out = mutableListOf<Entry>()
             runCatching {
                 val arr = org.json.JSONArray(prefs.quickNavList)
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    // 兼容三代数据：{value,label}（当前）/ {dest,label,uri} / {name,uri}
-                    // 优先级：value > 完整链接 uri > dest/name
                     val value = o.optString("value", "")
-                    val uri = o.optString("uri", "")
-                    val dest = o.optString("dest", o.optString("name"))
                     val label = o.optString("label", "")
-                    val v = when {
-                        value.isNotBlank() -> value
-                        uri.isNotBlank() && uri.contains("://") -> uri
-                        dest.isNotBlank() -> dest
-                        else -> uri
-                    }
-                    if (v.isNotBlank()) out.add(Entry(v, label))
+                    if (value.isNotBlank()) out.add(Entry(value, label))
                 }
             }
             return out
