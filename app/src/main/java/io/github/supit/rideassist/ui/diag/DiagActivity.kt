@@ -311,9 +311,11 @@ class DiagActivity : AppCompatActivity() {
         header?.let { add(it.getOrElse(c) { "" }) }
   addAll(rows.map { it.getOrElse(c) { "" } })
        }
+      // ⭐ 额外留 6dp 余量：列宽原本刚好等于最长内容宽度，
+      //    表头「实测值」三个字会顶到边框上（用户反馈「挤」）。
       numericWidth[c] = cells.maxOf {
                 paint.measureText(it) + padPx * 2
-       }.toInt()
+       }.toInt() + dp(6)
         }
 
 fun addRow(cells: List<String>, isHeader: Boolean) {

@@ -102,9 +102,12 @@
        <com.google.android.material.card.MaterialCardView
          style="@style/DiagCard">
 
+    <!-- ⚠️ paddingStart 8dp：这张卡里没有 DiagTable 包裹，
+         实测首字比其它区块靠左 23px（约 8dp），补上才和告警项/型号行对齐 -->
     <TextView
     style="@style/DiagText"
-    android:id="@+id/tv_device" />
+    android:id="@+id/tv_device"
+    android:paddingStart="8dp" />
       </com.google.android.material.card.MaterialCardView>
 
 <!-- 本机设备身份：读不到的项不显示 -->
