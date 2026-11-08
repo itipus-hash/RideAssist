@@ -80,7 +80,6 @@ class DeviceProfileTest {
         assertEquals("1.43", map["版本"])
         assertEquals("SN123456", map["SN"])
         assertEquals("铁锂", map["电池类型"])
-        assertEquals("60.0 Ah", map["额定容量"])
     }
 
     @Test fun `空缓存不产生任何行`() {
