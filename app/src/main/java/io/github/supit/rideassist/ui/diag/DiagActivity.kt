@@ -555,10 +555,10 @@ header?.let { addRow(it, isHeader = true) }
         )
     }
 
-    /** 本地缓存标注，形如「本地缓存(11-08 23:41 保存)」 */
+    /** 本地缓存标注，形如「本地缓存(11-08 23:41)」 */
     private fun savedAtText(ms: Long): String {
         if (ms <= 0L) return "本地缓存(时间未知)"
-        return "本地缓存(${formatStamp(ms)} 保存)"
+        return "本地缓存(${formatStamp(ms)})"
     }
 
     private fun fmtMs(ms: Long): String {
