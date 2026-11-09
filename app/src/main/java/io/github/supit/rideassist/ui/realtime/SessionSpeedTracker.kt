@@ -941,23 +941,6 @@ class SessionSpeedTracker : ViewModel() {
         return bestIdx to bestDev
     }
 
-    // ==================== Max/Min 持久化（断连 3 分钟才清零） ====================
-    /**
-     * 记录「末次有数据」的时刻并持久化 [maxSpeed]。
-     *
-     * ⭐ 用户需求："各种 Max Min 值的清零时间，改为断开保护板连接超过 3 分钟，
-     * 这样短时间关闭 APP 也不会丢失，可能需要本地记录末次连接时间。"
-     *
-     * 每次收到有效数据就调用一次（写SP 约 1KB，开销可忽略）。
-     */
-    fun persistMaxSpeed(context: android.content.Context) {
-        val sp = context.getSharedPreferences(SP_NAME, android.content.Context.MODE_PRIVATE)
-        sp.edit()
-            .putInt(KEY_MAX_SPEED, maxSpeed)
-            .putLong(KEY_LAST_ACTIVE, System.currentTimeMillis())
-            .apply()
-    }
-
 
     // ==================== ⭐ 会话持久化（跨进程被杀） ====================
 
@@ -1043,9 +1026,6 @@ class SessionSpeedTracker : ViewModel() {
 
         // ==================== Max/Min 持久化 ====================
 
-        private const val SP_NAME = "yybms_session_peak"
-        private const val KEY_MAX_SPEED = "max_speed"
-        private const val KEY_LAST_ACTIVE = "last_active_ms"
 
         /** 压差历史保留条数（用户指定 10 条 = 最近 10 次行程，最新在最上） */
         const val MAX_DIFF_HISTORY = 10
@@ -1060,16 +1040,9 @@ class SessionSpeedTracker : ViewModel() {
         const val MIN_DIFF_HISTORY_MV = 50f
 
         /**
-         * Max/Min 的保留时长：**3 分钟**（用户指定）。
-         *
-         * 断开保护板超过这么久才清零；短时间关闭 APP 重新打开仍保留峰值。
-         */
-        const val MAX_KEEP_MS = 3 * 60 * 1000L
-
-        /**
          * **停止记录**的判据：断开保护板连接超过这么久。
          *
-         * 与 [MAX_KEEP_MS] 同为 3 分钟（用户指定）。
+         * 与「断开保护板 3 分钟」是同一个时长（用户指定）。
          * ⭐ 这是**唯一**的停止条件 —— 电流掉到 1A 以下**不停止**。
          */
         const val STOP_AFTER_DISCONNECT_MS = 3 * 60 * 1000L
