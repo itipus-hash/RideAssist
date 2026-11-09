@@ -216,6 +216,7 @@
         <!-- ============ 胎压监测 ============
              数据来源：TPMS 传感器广播（纯 beacon，只扫不连，见 TPMS_REVERSE.md）。
              左右两半 = 前/后轮；未绑定时显示「未匹配」。
+             ⭐ 单击整张卡 → 胎压设置页（2026-11-09 用户要求：去掉齿轮图标，改为触摸卡片进入）。
              ⭐ 长按左/右半区进入该轮位绑定（倒计时 30s），已绑定时弹解绑/重绑。
              阈值越界数值标红（阈值在设置页配置）。 -->
         <com.google.android.material.card.MaterialCardView
@@ -223,6 +224,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="true"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp">
@@ -233,8 +236,9 @@
                 android:orientation="vertical"
                 android:padding="12dp">
 
-                <!-- ⭐ 标题行改 FrameLayout：时钟**水平居中**（用户要求），
-                     左=标题，右=提示+设置入口，互不挤占 -->
+                <!-- ⭐ 标题行用 FrameLayout：时钟**水平居中**（用户要求），左侧是标题。
+                     右侧的齿轮设置按钮已于 2026-11-09 取消 —— 改为单击整张卡进设置页，
+                     标题行不再需要额外的入口容器。 -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
@@ -260,26 +264,6 @@
                         android:textSize="30sp"
                         android:textStyle="bold"
                         tools:text="14:05" />
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="end|center_vertical"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <!-- 阈值配置入口：主界面 Toolbar 菜单实机不可达（沉浸式盖住，既有问题），
-                             没有这个图标阈值就改不了，故在此直达设置页 -->
-                        <ImageButton
-                            android:id="@+id/btn_tpms_settings"
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:layout_marginStart="4dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/setting_tpms_threshold"
-                            android:scaleType="fitCenter"
-                            app:srcCompat="@drawable/ic_gear" />
-                    </LinearLayout>
                 </FrameLayout>
 
                 <LinearLayout

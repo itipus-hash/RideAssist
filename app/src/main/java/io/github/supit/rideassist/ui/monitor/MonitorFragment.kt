@@ -536,7 +536,16 @@ class MonitorFragment : Fragment() {
     // ==================== 胎压监测（TPMS） ====================
 
     /**
-     * 胎压卡：订阅 [TpmsMonitor] 状态 + 长按绑定。
+     * 胎压卡：订阅 [TpmsMonitor] 状态 + 单击进设置 + 长按绑定。
+     *
+     * ## 进入设置页（2026-11-09 用户要求）
+     * 标题行的齿轮图标已删除，改为**单击整张胎压卡**进入胎压设置页
+     * （阈值 / 已绑定传感器 / 电池型号）。Toolbar 菜单在沉浸式下实机不可达，
+     * 这条路径是必要的补偿入口。
+     *
+     * ⚠️ 监听不能只挂在整张卡上：前/后轮两个子布局带长按监听，会消费 ACTION_UP，
+     *    点数值区域时父卡收不到 click。所以三个区域挂同一个监听。
+     *    长按已触发时框架会抑制随后的 click，绑定交互不会被误触发。
      *
      * ## 绑定交互
      * - 未绑定轮位：长按 → 直接进入 30s 绑定窗口（卡片上显示倒计时）
@@ -549,13 +558,22 @@ class MonitorFragment : Fragment() {
         val app = io.github.supit.rideassist.YybmsAppHolder.from(requireContext())
         val monitor = app.tpmsMonitor
 
+        fun openTpmsSettings() {
+            startActivity(
+                Intent(
+                    requireContext(),
+                    io.github.supit.rideassist.ui.settings.SettingsActivity::class.java,
+                )
+            )
+        }
+        binding.cardTpms.setOnClickListener { openTpmsSettings() }
+        // ⚠️ 这两个子区域带长按监听（下方），必须补挂同一个单击监听，
+        //    否则点前/后轮数值区域进不去设置页。
+        binding.layoutTpmsFront.setOnClickListener { openTpmsSettings() }
+        binding.layoutTpmsRear.setOnClickListener { openTpmsSettings() }
+
         binding.layoutTpmsFront.setOnLongClickListener { onTpmsLongPress(TpmsMonitor.POS_FRONT); true }
         binding.layoutTpmsRear.setOnLongClickListener { onTpmsLongPress(TpmsMonitor.POS_REAR); true }
-
-        // 阈值配置入口 → 设置页（Toolbar 菜单实机不可达的补偿路径）
-        binding.btnTpmsSettings.setOnClickListener {
-            startActivity(Intent(requireContext(), io.github.supit.rideassist.ui.settings.SettingsActivity::class.java))
-        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
