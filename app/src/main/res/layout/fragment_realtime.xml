@@ -555,8 +555,9 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- ============ 最近 10 次「最大压差」的单体历史 ============
-             ⭐ 2026-11-09 用户要求改为**常驻卡**（对齐「数据」页的「峰值记录」）：
-                不再只在聚焦压差卡时出现，普通布局 / 聚焦其它卡也一直显示；
+             ⭐ 2026-11-09 最终口径：**聚焦压差卡时的附属卡**，
+                实时页主界面（普通布局）/ 聚焦其它卡时整卡 GONE。
+                但只要聚焦压差卡就一直显示（不再要求已有记录），
                 没有记录时显示占位文案「暂无压差＞50mV记录」。
              ⭐ 一条 = 一次行程（压差 > 50mV 才记），一行一条、最新在最上，
                 格式见 @string/diff_history_row：11-09 单体14 @ 3.946V 偏离 82.1mV
@@ -568,6 +569,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:visibility="gone"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp">
