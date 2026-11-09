@@ -61,6 +61,14 @@ class YybmsApp : Application() {
     }
 
     /**
+     * ⭐ 极速历史的**独立落盘**（用户 2026-11-10：与最大压差单体记录同口径，
+     * 重开 APP 也要一直显示）。
+     */
+    val topSpeedHistoryCache: io.github.supit.rideassist.data.prefs.TopSpeedHistoryPrefs by lazy {
+        io.github.supit.rideassist.data.prefs.TopSpeedHistoryPrefs(this)
+    }
+
+    /**
      * ⭐⭐⭐ 会话记录器 —— **应用级单例**（原为 Activity 作用域 ViewModel）。
      *
      * ## 为什么升到 Application 作用域
@@ -71,16 +79,29 @@ class YybmsApp : Application() {
      * 语义仍然等价于「本次会话」：退出 APP 进程即重置，
      * 且**不做跨进程恢复** —— 退出 APP 即全新会话（2026-10-20 用户要求）。
      *
-     * ⚠️ **唯一例外**：聚焦压差卡下面的「最大压差单体历史」。
-     *    用户 2026-11-09 明确要求它「一直能显示、重开 APP 不能不见」，
-     *    所以创建单例时先从 [diffHistoryCache] 恢复，再挂上写回回调。
+     * ⚠️ **唯一例外**：聚焦压差卡下面的「最大压差单体历史」与聚焦速度卡下面的
+     *    「极速记录」。用户 2026-11-09 / 2026-11-10 明确要求它们
+     *    「一直能显示、重开 APP 不能不见」，所以创建单例时先从
+     *    [diffHistoryCache] / [topSpeedHistoryCache] 恢复，再挂上写回回调。
      *    其余曲线 / 峰值 / 统计仍是纯内存，不受影响。
+     *
+     * ⭐ 两项「记录阈值」（压差 mV / 极速 Km/h）也在这里注入：
+     *    用 provider 实时读 [prefs]，用户改完设置下一帧就生效，
+     *    不需要重建 tracker，也让 SessionSpeedTracker 不依赖 Android Context。
      */
     val sessionTracker: io.github.supit.rideassist.ui.realtime.SessionSpeedTracker by lazy {
         io.github.supit.rideassist.ui.realtime.SessionSpeedTracker().also { tracker ->
             // ⚠️ 顺序不能反：先恢复，再挂写回回调；否则恢复动作会被当成一次新变更写回去
             tracker.restoreDiffHistory(diffHistoryCache.raw)
+            tracker.restoreTopSpeedHistory(topSpeedHistoryCache.raw)
             tracker.diffHistorySink = { raw -> diffHistoryCache.raw = raw }
+            tracker.topSpeedHistorySink = { raw -> topSpeedHistoryCache.raw = raw }
+            tracker.thresholdsProvider = {
+                io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.RecordThresholds(
+                    diffMv = prefs.diffRecordThresholdMv,
+                    topSpeedKmh = prefs.topSpeedRecordThresholdKmh,
+                )
+            }
         }
     }
 

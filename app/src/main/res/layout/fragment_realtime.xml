@@ -598,7 +598,54 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="@string/diff_history_empty"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 最近 10 次「极速」记录 ============
+             ⭐ 2026-11-10 用户要求：聚焦**速度卡**时最下方显示，
+                显示与实现方式完全参考上面的「最大压差单体记录」：
+                - 一条 = 一次行程（速度 > 阈值才记），一行一条、最新在最上；
+                - 主界面 / 聚焦其它卡时整卡 GONE，聚焦速度卡时无论有无记录都显示；
+                - 无记录显示占位文案「暂无极速＞50 Km/h记录」。
+             格式见 @string/top_speed_history_row：11-10 极速 55Km/h @ 11:34
+             ⚠️ 与压差卡同理：容器 ll_top_speed_history **只放行**，
+                标题与空态是兄弟节点，否则行循环会把它们当成数据行改写掉。 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_top_speed_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/top_speed_history_title" />
+
+                <LinearLayout
+                    android:id="@+id/ll_top_speed_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/tv_top_speed_history_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
                     android:textColor="@color/text_secondary"
                     android:textSize="14sp" />
             </LinearLayout>

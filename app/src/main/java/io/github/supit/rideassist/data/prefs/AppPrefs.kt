@@ -2,6 +2,7 @@ package io.github.supit.rideassist.data.prefs
 
 import android.content.Context
 import androidx.core.content.edit
+import io.github.supit.rideassist.util.RecordThreshold
 
 /**
  * 已保存设备记录与开关状态。
@@ -231,6 +232,37 @@ class AppPrefs(context: Context) {
         get() = sp.getBoolean(KEY_REALTIME_CURVE_SHOW, false)
         set(value) = sp.edit { putBoolean(KEY_REALTIME_CURVE_SHOW, value) }
 
+    // ==================== 记录阈值（连接设置页两项数字输入） ====================
+
+    /**
+     * ⭐ **最大压差记录阈值（mV）**（用户 2026-11-10）。
+     *
+     * 只影响「最大压差单体记录」历史卡：行程压差**严格大于**本值才记一条。
+     * 默认 50，留空 / 非法 / 负数由 [RecordThreshold] 归一回 50。
+     * ⚠️ 会话峰值记录卡不受影响，小压差照常显示。
+     */
+    var diffRecordThresholdMv: Float
+        get() = RecordThreshold.normalize(
+            sp.getFloat(KEY_DIFF_RECORD_THRESHOLD, RecordThreshold.DEFAULT)
+        )
+        set(value) = sp.edit {
+            putFloat(KEY_DIFF_RECORD_THRESHOLD, RecordThreshold.normalize(value))
+        }
+
+    /**
+     * ⭐ **极速记录阈值（Km/h）**（用户 2026-11-10）。
+     *
+     * 只影响「极速记录」历史卡：行程速度**严格大于**本值才记一条。
+     * 默认 50，留空 / 非法 / 负数同样归一回 50。
+     */
+    var topSpeedRecordThresholdKmh: Float
+        get() = RecordThreshold.normalize(
+            sp.getFloat(KEY_TOP_SPEED_RECORD_THRESHOLD, RecordThreshold.DEFAULT)
+        )
+        set(value) = sp.edit {
+            putFloat(KEY_TOP_SPEED_RECORD_THRESHOLD, RecordThreshold.normalize(value))
+        }
+
     /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
     var overlayShowSpace: Boolean
         get() = sp.getBoolean("overlay_show_space", false)
@@ -431,6 +463,8 @@ class AppPrefs(context: Context) {
 
         private const val KEY_CONNECT_JUMP_TAB = "connect_jump_tab"
         private const val KEY_REALTIME_CURVE_SHOW = "realtime_curve_show"
+        private const val KEY_DIFF_RECORD_THRESHOLD = "diff_record_threshold_mv"
+        private const val KEY_TOP_SPEED_RECORD_THRESHOLD = "top_speed_record_threshold_kmh"
         private const val KEY_LAST_MAC = "last_device_mac"
         private const val KEY_LAST_NAME = "last_device_name"
         private const val KEY_AUTO_CONNECT = "auto_connect_enabled"

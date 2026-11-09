@@ -8,6 +8,11 @@
   - 不写任何说明 / 提示文案；
   - 「连接后跳转」选项只有 4 个标签页，「首页」本身就等于不跳转，
     不再单列「不跳转」。
+
+  2026-11-10 新增第三、四项：两项**记录阈值**（数字输入，右侧输入框）：
+  - 最大压差记录阈值（mV），默认 50；
+  - 极速记录阈值（Km/h），默认 50。
+  留空或填非法值 → 失焦 / 关闭页面时回填 50（见 RecordThreshold）。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -90,6 +95,64 @@
                             android:entries="@array/curve_default_labels"
                             android:minWidth="120dp"
                             android:spinnerMode="dropdown" />
+                    </LinearLayout>
+
+                    <!-- 第三项（2026-11-10）：最大压差记录阈值（mV）。
+                         与上面两项同样的「一行搞定」风格：左边文字，右边数字输入框。
+                         ⚠️ 不写任何提示文案；留空/非法值在失焦或退出页面时回填 50。 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_diff_threshold_title"
+                            android:textSize="14sp" />
+
+                        <EditText
+                            android:id="@+id/et_diff_threshold"
+                            android:layout_width="72dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="end"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1"
+                            android:minWidth="72dp"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- 第四项（2026-11-10）：极速记录阈值（Km/h），风格与第三项一致 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_top_speed_threshold_title"
+                            android:textSize="14sp" />
+
+                        <EditText
+                            android:id="@+id/et_top_speed_threshold"
+                            android:layout_width="72dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="end"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1"
+                            android:minWidth="72dp"
+                            android:textSize="14sp" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

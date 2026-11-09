@@ -74,6 +74,25 @@ class DiffHistoryTest {
     }
 
     @Test
+    fun `阈值改成 80mV 后 60mV 不再记录 90mV 才记`() {
+        val t = SessionSpeedTracker()
+        // 用户 2026-11-10：阈值可在连接设置页改，由 YybmsApp 注入 provider 实时读取
+        t.thresholdsProvider = {
+            SessionSpeedTracker.RecordThresholds(diffMv = 80f, topSpeedKmh = 50f)
+        }
+        startTrip(t)
+
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 60f, frame(3.900f))
+        assertTrue(t.diffHistory.isEmpty())
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 80f, frame(3.900f))   // 恰好等于阈值
+        assertTrue(t.diffHistory.isEmpty())
+
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 90f, frame(3.850f))
+        assertEquals(1, t.diffHistory.size)
+        assertEquals(90f, t.diffHistory[0].diffMv, 0.0001f)
+    }
+
+    @Test
     fun `单次行程只记录一条 且保留该行程压差最大那帧的快照`() {
         val t = SessionSpeedTracker()
         startTrip(t)

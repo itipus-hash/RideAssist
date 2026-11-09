@@ -753,6 +753,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         setTopMargin(b.cardPeakRecord, if (focus == null) 0 else gap)
         // 压差历史卡跟在记录卡下面，同属聚焦附属卡，按聚焦态统一间距
         setTopMargin(b.cardDiffHistory, if (focus == null) 0 else gap)
+        // 极速记录卡是速度卡的附属卡（2026-11-10），同口径
+        setTopMargin(b.cardTopSpeedHistory, if (focus == null) 0 else gap)
     }
 
     /** 设置 topMargin（已是目标像素值时跳过，避免重复触发 layout） */
@@ -1308,6 +1310,7 @@ class RealtimeFragment : Fragment(), LocationListener {
     private fun renderPeakSection() {
         renderPeakRecordCard()
         renderDiffHistoryCard()
+        renderTopSpeedHistoryCard()
     }
 
     /**
@@ -1317,10 +1320,11 @@ class RealtimeFragment : Fragment(), LocationListener {
      *    （普通布局）与聚焦其它卡时整卡 GONE —— 它是聚焦模式的附属卡，
      *    主界面多一张卡会打乱四张数值卡的排版。
      *    但进入聚焦压差卡后**始终显示**（不再要求已有记录）：
-     *    列表为空时显示「暂无压差＞50mV记录」占位，避免用户以为功能不存在。
+     *    列表为空时显示「暂无压差＞X mV记录」占位（X = 设置页的当前阈值），
+     *    避免用户以为功能不存在。
      *
      * 列表最新在最上，顺序由 [SessionSpeedTracker.diffHistory] 保证；
-     * **一条 = 一次行程**（压差没超过 50mV 的行程不记），
+     * **一条 = 一次行程**（压差没超过记录阈值的行程不记），
      * 同行程内压差再创新高只会替换那一条，不会追加。
      * ⭐ 这份历史单独落盘，重开 APP 仍在（用户 2026-11-09 要求「一直能显示」）；
      * 只有用户显式点「清空本次会话」才会连同其它会话数据一起清空。
@@ -1343,6 +1347,18 @@ class RealtimeFragment : Fragment(), LocationListener {
         val emptyVisibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
         if (b.tvDiffHistoryEmpty.visibility != emptyVisibility) {
             b.tvDiffHistoryEmpty.visibility = emptyVisibility
+        }
+        if (rows.isEmpty()) {
+            // ⭐ 阈值可在连接设置页改，空态文案必须跟着变，不能写死 50mV
+            val empty = getString(
+                R.string.diff_history_empty,
+                io.github.supit.rideassist.util.RecordThreshold.label(
+                    tracker.currentThresholds.diffMv
+                ),
+            )
+            if (b.tvDiffHistoryEmpty.text.toString() != empty) {
+                b.tvDiffHistoryEmpty.text = empty
+            }
         }
 
         val container = b.llDiffHistory
@@ -1373,6 +1389,96 @@ class RealtimeFragment : Fragment(), LocationListener {
             if (tv.text.toString() != line) tv.text = line
 
             // 第一行（最新）用主色加粗，其余中性灰 —— 不加标题行也能看出方向。
+            val newest = i == 0
+            if (tv.tag != newest) {
+                tv.tag = newest
+                tv.setTextColor(
+                    ContextCompat.getColor(
+                        container.context,
+                        if (newest) R.color.primary else R.color.text_secondary,
+                    )
+                )
+                tv.setTypeface(
+                    android.graphics.Typeface.MONOSPACE,
+                    if (newest) android.graphics.Typeface.BOLD
+                    else android.graphics.Typeface.NORMAL,
+                )
+            }
+            val lp = tv.layoutParams as LinearLayout.LayoutParams
+            val wantGap = if (newest) 0 else rowGapPx
+            if (lp.topMargin != wantGap) {
+                lp.topMargin = wantGap
+                tv.layoutParams = lp
+            }
+        }
+    }
+
+    /**
+     * 渲染「最近 10 次行程的极速」历史卡（用户 2026-11-10）。
+     *
+     * 口径与上面的压差历史卡**完全对称**：
+     * - **只在聚焦速度卡时出现**；主界面 / 聚焦其它卡整卡 GONE；
+     * - 聚焦速度卡后**始终显示**，无记录时显示「暂无极速＞50 Km/h记录」；
+     * - 一条 = 一次行程（速度没超过记录阈值的不记），同行程只保留更快的那次；
+     * - 最新在最上，顺序由 [SessionSpeedTracker.topSpeedHistory] 保证；
+     * - 单独落盘，重开 APP 仍在；用户显式清空会话才清空。
+     *
+     * 行格式：`11-10 极速 55Km/h @ 11:34`（@string/top_speed_history_row）。
+     *
+     * ⚠️ 与压差卡同样复用 TextView，不要缓存 View 到 Fragment 字段。
+     */
+    private fun renderTopSpeedHistoryCard() {
+        val b = _binding ?: return
+        val visible = focusedCardIndex == CARD_SPEED
+        b.cardTopSpeedHistory.visibility = if (visible) View.VISIBLE else View.GONE
+        if (!visible) return
+
+        val rows = tracker.topSpeedHistory
+        val emptyVisibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        if (b.tvTopSpeedHistoryEmpty.visibility != emptyVisibility) {
+            b.tvTopSpeedHistoryEmpty.visibility = emptyVisibility
+        }
+        if (rows.isEmpty()) {
+            // ⭐ 阈值来自连接设置页，空态文案跟着变
+            val empty = getString(
+                R.string.top_speed_history_empty,
+                io.github.supit.rideassist.util.RecordThreshold.label(
+                    tracker.currentThresholds.topSpeedKmh
+                ),
+            )
+            if (b.tvTopSpeedHistoryEmpty.text.toString() != empty) {
+                b.tvTopSpeedHistoryEmpty.text = empty
+            }
+        }
+
+        val container = b.llTopSpeedHistory
+        val rowGapPx = (4 * resources.displayMetrics.density).toInt()
+        while (container.childCount < rows.size) {
+            container.addView(TextView(container.context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                )
+                textSize = 14f
+                typeface = android.graphics.Typeface.MONOSPACE
+                includeFontPadding = false
+            })
+        }
+        for (i in 0 until container.childCount) {
+            val tv = container.getChildAt(i) as TextView
+            if (i >= rows.size) {
+                if (tv.visibility != View.GONE) tv.visibility = View.GONE
+                continue
+            }
+            if (tv.visibility != View.VISIBLE) tv.visibility = View.VISIBLE
+
+            val e = rows[i]
+            val line = getString(
+                R.string.top_speed_history_row, e.date, e.speedKmh, e.clock
+            )
+            if (tv.text.toString() != line) tv.text = line
+
+            // 第一行（最新）用主色加粗，其余中性灰（与压差卡一致）
             val newest = i == 0
             if (tv.tag != newest) {
                 tv.tag = newest

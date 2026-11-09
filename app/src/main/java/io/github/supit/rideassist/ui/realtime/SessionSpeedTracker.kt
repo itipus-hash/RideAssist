@@ -275,14 +275,134 @@ class SessionSpeedTracker : ViewModel() {
             .take(MAX_DIFF_HISTORY)
             .toList()
         diffHistory = rows
-        var maxTrip = 0L
-        for (r in rows) if (r.tripId > maxTrip) maxTrip = r.tripId
-        tripSeq = maxTrip
+        // ⭐ 两份历史共用 tripSeq，只能往上抬（详见 [bumpTripSeq]）
+        bumpTripSeq(rows.map { it.tripId })
     }
 
     /** 只在真正变化时落盘；没有注入回调（纯 JVM 单测）时是 no-op */
     private fun persistDiffHistory() {
         diffHistorySink?.invoke(encodeDiffHistory())
+    }
+
+    // ==================== ⭐ 极速历史（用户 2026-11-10） ====================
+
+    /**
+     * 一次行程里**超过阈值的最大速度**那一刻的快照。
+     * 显示格式（@string/top_speed_history_row）：`11-10 极速 55Km/h @ 11:34`
+     *
+     * @param tripId   所属行程序号（与压差历史共用一套编号，不显示）
+     * @param speedKmh  该行程当时的峰值速度（整数，与页面显示口径一致）
+     * @param date      MM-dd
+     * @param clock     HH:mm，达到该速度的那一刻
+     */
+    data class TopSpeedHistoryEntry(
+        val tripId: Long,
+        val speedKmh: Int,
+        val date: String,
+        val clock: String,
+    )
+
+    /**
+     * 两项记录阈值。**由 YybmsApp 注入「实时读 AppPrefs」的 provider**：
+     * 用户在连接设置页改完数字，下一帧就生效，不需要重建 tracker；
+     * 纯 JVM 单测不注入时用 [MIN_DIFF_HISTORY_MV] / [MIN_TOP_SPEED_HISTORY_KMH]。
+     *
+     * ⚠️ 阈值只决定「记不记历史」，不影响会话峰值卡与曲线。
+     */
+    data class RecordThresholds(val diffMv: Float, val topSpeedKmh: Float)
+
+    @Volatile
+    var thresholdsProvider: (() -> RecordThresholds)? = null
+
+    private fun thresholds(): RecordThresholds = thresholdsProvider?.invoke()
+        ?: RecordThresholds(MIN_DIFF_HISTORY_MV, MIN_TOP_SPEED_HISTORY_KMH)
+
+    /** 当前生效的阈值（实时页两张历史卡的空态文案用） */
+    val currentThresholds: RecordThresholds get() = thresholds()
+
+    /**
+     * ⭐ 最近 [MAX_TOP_SPEED_HISTORY] 次行程的极速，**最新在最前**。
+     * 与 [diffHistory] 同口径：一条 = 一次行程、独立 SP 落盘、跨 APP 重启保留。
+     */
+    @Volatile
+    var topSpeedHistory: List<TopSpeedHistoryEntry> = emptyList()
+        private set
+
+    /** 历史变化时的落盘回调（参数是 [encodeTopSpeedHistory] 的结果） */
+    @Volatile
+    var topSpeedHistorySink: ((String) -> Unit)? = null
+
+    private fun appendTopSpeedHistory(entry: TopSpeedHistoryEntry) {
+        val previous = topSpeedHistory
+        topSpeedHistory = if (previous.firstOrNull()?.tripId == entry.tripId) {
+            listOf(entry) + previous.drop(1)          // 同行程：替换成更高的速度
+        } else {
+            listOf(entry) + previous.take(MAX_TOP_SPEED_HISTORY - 1)
+        }
+        persistTopSpeedHistory()
+    }
+
+    private fun persistTopSpeedHistory() {
+        topSpeedHistorySink?.invoke(encodeTopSpeedHistory())
+    }
+
+    /** `tripId|speedKmh|date|clock`；字段不含分隔符，坏行恢复时跳过 */
+    fun encodeTopSpeedHistory(): String = topSpeedHistory.joinToString("\n") { e ->
+        listOf(
+            e.tripId.toString(), e.speedKmh.toString(), e.date, e.clock,
+        ).joinToString("|")
+    }
+
+    fun restoreTopSpeedHistory(raw: String) {
+        if (raw.isBlank()) return
+        val rows = raw.lineSequence().mapNotNull { line ->
+            val p = line.split('|')
+            if (p.size != 4) return@mapNotNull null
+            val tripId = p[0].toLongOrNull() ?: return@mapNotNull null
+            val speed = p[1].toIntOrNull() ?: return@mapNotNull null
+            TopSpeedHistoryEntry(tripId, speed, p[2], p[3])
+        }
+            .sortedByDescending { it.tripId }
+            .take(MAX_TOP_SPEED_HISTORY)
+            .toList()
+        topSpeedHistory = rows
+        bumpTripSeq(rows.map { it.tripId })
+    }
+
+    /**
+     * ⭐ 两份历史**共用** [tripSeq]，恢复时只能往上抬、不能压回去：
+     * 否则后恢复的那份会把编号改小，新行程会「替换」掉另一份里的旧记录。
+     */
+    private fun bumpTripSeq(ids: List<Long>) {
+        var max = tripSeq
+        for (id in ids) if (id > max) max = id
+        tripSeq = max
+    }
+
+    /**
+     * ⭐⭐ **极速历史的唯一写入口**，挂在 [updatePeak] 的**会话峰值门控之前**
+     * （与 [updateDiffHistory] 同理：挂在门控之后，第 2 次行程没破会话极速
+     * 就一条都记不到）。
+     *
+     * 三条规则与压差历史完全对称：
+     * 1. 不在行程里不记；2. 速度没**严格大于**阈值不记；
+     * 3. 同行程只在刷新本行程峰值时替换，一条 = 一次行程。
+     */
+    private fun updateTopSpeedHistory(valueKmh: Float, now: java.util.Date) {
+        val trip = tripSeq
+        if (!isRecording || trip <= 0L) return
+        val speed = valueKmh.toInt()             // 与页面水印 / 峰值卡一致的整数口径
+        if (speed.toFloat() <= thresholds().topSpeedKmh) return
+        val current = topSpeedHistory.firstOrNull { it.tripId == trip }
+        if (current != null && speed <= current.speedKmh) return
+        appendTopSpeedHistory(
+            TopSpeedHistoryEntry(
+                tripId = trip,
+                speedKmh = speed,
+                date = DATE_FORMAT.format(now),
+                clock = CLOCK_FORMAT.format(now),
+            )
+        )
     }
 
     /**
@@ -291,8 +411,9 @@ class SessionSpeedTracker : ViewModel() {
      * 三条硬规则：
      * 1. **单次行程只记录一次** —— 同一行程里压差再创新高，是**替换**这一条，
      *    内容换成「该行程压差最大那一帧」的快照；
-     * 2. **压差没超过 [MIN_DIFF_HISTORY_MV]（50mV）不记录** ——
-     *    `cellDiff` 单位就是 mV（见 YybmsPayloadParser：`(max-min)*1000f`）；
+     * 2. **压差没超过记录阈值（默认 50mV，可在连接设置页改）不记录** ——
+     *    阈值由 [thresholds] 实时读 AppPrefs；`cellDiff` 单位就是 mV
+     *    （见 YybmsPayloadParser：`(max-min)*1000f`）；
      * 3. **行程以记录状态机为准** —— 一次 `isRecording: false→true` 是一次新行程，
      *    停车等红灯不会结束行程（锁存），所以一次骑行不会冒出好几条。
      *
@@ -309,7 +430,7 @@ class SessionSpeedTracker : ViewModel() {
     ) {
         val trip = tripSeq
         if (!isRecording || trip <= 0L) return          // 不在行程里 → 不记
-        if (valueMv <= MIN_DIFF_HISTORY_MV) return      // 没超过 50mV → 不记
+        if (valueMv <= thresholds().diffMv) return      // 没超过记录阈值 → 不记
         val v = d.cellVoltages
         if (d.cellCount < 2 || v.size < 2) return       // 无「压差」可言
 
@@ -922,6 +1043,10 @@ class SessionSpeedTracker : ViewModel() {
         //    （详见 [updateDiffHistory] 的说明：门控之后会漏掉整个行程）。
         if (index == CARD_DIFF) updateDiffHistory(value, d, now)
 
+        // ⭐⭐ 极速历史同理：按行程统计，必须放在会话峰值门控之前，
+        //    否则第 2 次行程没破整段会话极速就一条都记不到。
+        if (index == CARD_SPEED) updateTopSpeedHistory(value, now)
+
         val cur = peakRecords[index]
         if (cur != null && value <= cur.value) return false    // 没超过历史最大
 
@@ -1015,7 +1140,7 @@ class SessionSpeedTracker : ViewModel() {
      *
      * 曲线队列也一并清掉 —— 否则会出现「累加器归零但曲线还在」的自相矛盾。
      *
-     * ⚠️ 压差历史是**跨 APP 重启持久化**的（用户要求一直能显示），
+     * ⚠️ 压差历史 / 极速历史是**跨 APP 重启持久化**的（用户要求一直能显示），
      *    所以这里必须同步把落盘写成空串；否则用户明明点了清空，
      *    重开 APP 旧记录又会「复活」。
      */
@@ -1044,8 +1169,10 @@ class SessionSpeedTracker : ViewModel() {
         lastDischargeWallMs = 0L
         diffPoints.clear()
         diffHistory = emptyList()
+        topSpeedHistory = emptyList()
         tripSeq = 0L             // ⭐ 会话清空 = 行程计数重新从 1 开始
         persistDiffHistory()     // ⭐ 同步清掉落盘，避免重开 APP 旧记录「复活」
+        persistTopSpeedHistory() // ⭐ 极速历史同口径：清空也要落盘
         java.util.Arrays.fill(peakRecords, null)
         _peakRevision.update { it + 1 }
         // ⭐ maxSpeed 也归零了，必须通知订阅方（悬浮窗的「极速」），
@@ -1107,8 +1234,23 @@ class SessionSpeedTracker : ViewModel() {
          * `cellDiff` 单位本就是 mV（YybmsPayloadParser：`(max-min)*1000f`），
          * 用严格大于判断：恰好 50mV 也不记。
          * 阈值只作用于**历史卡**，峰值记录卡仍照常显示小压差，不改变旧行为。
+         *
+         * ⚠️ 2026-11-10 起这是**默认值**：实际阈值由连接设置页的
+         *    「最大压差记录阈值（mV）」决定，经 [thresholdsProvider] 实时读取；
+         *    仅在未注入 provider（纯 JVM 单测）时作为兜底。
          */
         const val MIN_DIFF_HISTORY_MV = 50f
+
+        /** 极速历史保留条数（最近 10 次行程，最新在最上） */
+        const val MAX_TOP_SPEED_HISTORY = 10
+
+        /**
+         * ⭐ **极速历史的最小速度（Km/h）**：没超过 50Km/h 不记录。
+         *
+         * 与 [MIN_DIFF_HISTORY_MV] 一样只是**默认值**，实际由连接设置页的
+         * 「极速记录阈值（Km/h）」决定，经 [thresholdsProvider] 实时读取。
+         */
+        const val MIN_TOP_SPEED_HISTORY_KMH = 50f
 
         /**
          * **停止记录**的判据：断开保护板连接超过这么久。
