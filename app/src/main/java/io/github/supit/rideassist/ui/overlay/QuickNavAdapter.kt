@@ -14,7 +14,14 @@ import io.github.supit.rideassist.data.prefs.AppPrefs
  * ## 单按钮三合一手势（用户方案）
  * - **快速点按**（<500ms 无移动）→ 打开链接
  * - **按住拖动**（移动超 slop）→ 排序（任意方向，顺序持久化）
- * - **按住不动 ≥3 秒** → 进入内容编辑
+ * - **按住不动 ≥500ms** → 进入内容编辑
+ *
+ * ⚠️⚠️ **索引必须实时取**：拖动排序只发 `notifyItemMoved`，ViewHolder
+ * 跟着 ItemView 一起挪位置、**不会重新 onBind**，但它携带的
+ * `bindingAdapterPosition` 已经变成新位置。手势回调里绝不能用
+ * `onBindViewHolder` 参数 `position` 的闭包快照 —— 否则排序后长按
+ * 会把旧下标交给 `editCallback`，编辑对话框取到的是别的按钮
+ * （用户 2026-11-10 实测 bug）。见 [resolveQuickNavIndex]。
  */
 class QuickNavAdapter(
     private val prefs: AppPrefs,
@@ -54,9 +61,11 @@ class QuickNavAdapter(
     override fun getItemCount(): Int = entries.size
 
     override fun onBindViewHolder(holder: VH, position: Int) {
-        val e = entries[position]
-        val name = e.label.ifBlank { e.value }   // ⭐ 按钮显示自定义名称，无则输入内容
-        val value = e.value
+        // ⭐ 绑定时只渲染**按钮文字**：position 只用来取显示内容，绝不能
+        //    把手势回调需要的下标固化进闭包（原因见类 KDoc）。
+        val bound = entries[position]
+        holder.btn.text = bound.label.ifBlank { bound.value }
+
         val ctx = holder.btn.context
         val handler = android.os.Handler(android.os.Looper.getMainLooper())
         val slop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
@@ -64,8 +73,12 @@ class QuickNavAdapter(
         var downY = 0f
         var moved = false
         var editOpened = false
+        var pendingEdit: Runnable? = null
 
-        holder.btn.text = name
+        fun cancelPendingEdit() {
+            pendingEdit?.let { handler.removeCallbacks(it) }
+            pendingEdit = null
+        }
 
         holder.btn.setOnTouchListener { v, ev ->
             when (ev.actionMasked) {
@@ -74,14 +87,20 @@ class QuickNavAdapter(
                     downY = ev.rawY
                     moved = false
                     editOpened = false   // ⭐ 每次按下重置（否则编辑过一次的按钮永久失效）
-                    // ⭐ 按住不动 3 秒 → 进入内容编辑
+                    cancelPendingEdit()
                     // ⭐ 按住超过 500ms 立即进入编辑，无需松手（500ms 内拖动=排序）
-                    handler.postDelayed({
-                        if (!moved) {
-                            editOpened = true
-                            editCallback?.invoke(position)
-                        }
-                    }, 500L)
+                    val runnable = Runnable {
+                        if (moved) return@Runnable
+                        // ⭐⭐ 实时下标：排序后 ViewHolder 不重新 onBind，
+                        //    只有 bindingAdapterPosition 是当前正确位置。
+                        val idx = resolveQuickNavIndex(
+                            entries.size, holder.bindingAdapterPosition
+                        ) ?: return@Runnable
+                        editOpened = true
+                        editCallback?.invoke(idx)
+                    }
+                    pendingEdit = runnable
+                    handler.postDelayed(runnable, HOLD_TO_EDIT_MS)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -89,15 +108,20 @@ class QuickNavAdapter(
                     val dy = ev.rawY - downY
                     if (!moved && (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop)) {
                         moved = true
-                        handler.removeCallbacksAndMessages(null)   // 取消编辑计时
-                        touchHelper.startDrag(holder)              // 接管拖动排序
+                        cancelPendingEdit()                       // 取消编辑计时
+                        touchHelper.startDrag(holder)             // 接管拖动排序
                     }
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    handler.removeCallbacksAndMessages(null)
-                    // ⭐ 编辑模式已触发（按住 3 秒）→ 抬起不再当点击打开链接
-                    if (ev.actionMasked == MotionEvent.ACTION_UP && !moved && !editOpened) {
+                    cancelPendingEdit()
+                    // ⭐ 编辑模式已触发 → 抬起不再当点击打开链接
+                    // ⭐ 链接 / 地名同样按**实时位置**取，避免排序后打开别的按钮
+                    val idx = resolveQuickNavIndex(entries.size, holder.bindingAdapterPosition)
+                    if (ev.actionMasked == MotionEvent.ACTION_UP && !moved && !editOpened && idx != null) {
+                        val entry = entries[idx]
+                        val value = entry.value
+                        val name = entry.label.ifBlank { entry.value }
                         // ⭐ 判定顺序（用户要求）：含 // → 直接响应链接（最优先）；
                         //    坐标 → 弹「直接导航/路径规划」；其余 → 地名搜索
                         if (value.contains("//")) {
@@ -145,6 +169,9 @@ class QuickNavAdapter(
     var editCallback: ((Int) -> Unit)? = null
 
     companion object {
+        /** 按住多久进入编辑（此时间内移动 = 拖动排序） */
+        private const val HOLD_TO_EDIT_MS = 500L
+
         /**
          * 读取快捷导航条目 —— **只认 {value,label} 两个字段**。
          *
@@ -204,3 +231,15 @@ class QuickNavAdapter(
         }
     }
 }
+
+/**
+ * ⭐ 把 ViewHolder 的**当前** `bindingAdapterPosition` 解析成条目下标。
+ *
+ * 与 Android 无关的纯函数（刻意放在顶层而不是 Adapter 里），方便纯 JVM 单测
+ * 钉死「排序后不能用 bind 时 position」这条口径：
+ * - `notifyItemMoved` 之后 ViewHolder 不重新 onBind，但位置已经变了；
+ * - `RecyclerView.NO_POSITION`(-1) / 越界 / 空列表一律返回 `null`，
+ *   绝不把 -1 传进 `editQuickNav` —— 那里 -1 代表「新增」，会误弹新增框。
+ */
+internal fun resolveQuickNavIndex(size: Int, bindingAdapterPosition: Int): Int? =
+    bindingAdapterPosition.takeIf { it in 0 until size }
