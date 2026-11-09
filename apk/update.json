@@ -1,7 +1,7 @@
 {
-  "version": "1.0.35",
-  "notes": "1. 快捷导航数据统一为 {value,label} 两个字段：历史格式用 tools/migrate_quick_nav.py 一次性迁移，代码里不再兼容旧格式（旧的兼容分支会把 value/label 写颠倒）",
-  "apk": "RideAssist-v1.0.35.apk",
+  "version": "1.0.36",
+  "notes": "",
+  "apk": "RideAssist-v1.0.36.apk",
   "history": [
     {
       "version": "1.0.1",
@@ -142,6 +142,10 @@
     {
       "version": "1.0.35",
       "notes": "1. 快捷导航数据统一为 {value,label} 两个字段：历史格式用 tools/migrate_quick_nav.py 一次性迁移，代码里不再兼容旧格式（旧的兼容分支会把 value/label 写颠倒）"
+    },
+    {
+      "version": "1.0.36",
+      "notes": ""
     }
   ]
 }
