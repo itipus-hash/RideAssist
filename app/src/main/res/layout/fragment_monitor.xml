@@ -116,7 +116,8 @@
 
                     <!-- ⭐ 连接成功后的设置入口（齿轮，放在连接卡标题行最右侧）。
                          只在 CONNECTED 时显示：未连接时这一行要留给「扫描」按钮。
-                         图标与首页胎压卡的 btn_tpms_settings 保持同一套。 -->
+                         图标用自绘矢量齿轮 ic_gear（系统 ic_menu_preferences 是扳手）；
+                         点击进**独立的连接设置页**，不是胎压那个设置页。 -->
                     <ImageButton
                         android:id="@+id/btn_connection_settings"
                         android:layout_width="32dp"
@@ -125,7 +126,7 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/connection_settings"
                         android:scaleType="fitCenter"
-                        android:src="@android:drawable/ic_menu_preferences"
+                        app:srcCompat="@drawable/ic_gear"
                         android:visibility="gone"
                         tools:visibility="visible" />
                 </LinearLayout>
@@ -277,7 +278,7 @@
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="@string/setting_tpms_threshold"
                             android:scaleType="fitCenter"
-                            android:src="@android:drawable/ic_menu_preferences" />
+                            app:srcCompat="@drawable/ic_gear" />
                     </LinearLayout>
                 </FrameLayout>
 

@@ -193,18 +193,31 @@ class SessionSpeedTracker : ViewModel() {
      * 所以用「不可变 List 整体替换」而不是原地修改 MutableList ——
      * 避免遍历渲染时被并发修改。
      *
-     * ⚠️ 生命周期与 [peakRecords] 完全一致：**只在进程内存里**。
-     * 用户明确要求「退出 APP = 全新会话」，会话落盘已停用（见
-     * RealtimeFragment.onViewCreated），所以这里不做持久化；
-     * [resetSession] 会连同峰值一起清空。
+     * ⭐⭐ 生命周期**与会话其它数据不同**：用户 2026-11-09 明确要求
+     * 「重开 APP 也要一直能显示」。所以这块单独落盘（独立 SP 文件 `diff_history`），
+     * 冷启动时由 YybmsApp 调 [restoreDiffHistory] 恢复，每次变化由
+     * [diffHistorySink] 写回。曲线 / 峰值等仍遵守「退出 APP = 全新会话」，
+     * 不受影响。[resetSession] 会把落盘一并清空（用户显式清空会话）。
      */
     @Volatile
     var diffHistory: List<DiffHistoryEntry> = emptyList()
         private set
 
     /**
+     * ⭐ 历史变化时的落盘回调，参数是 [encodeDiffHistory] 的结果。
+     *
+     * 由 YybmsApp 注入；纯 JVM 单测里为 null，Tracker 本身不依赖 Android。
+     * 只在「历史真的变了」时触发（不是每帧），所以 SP 写入很轻。
+     */
+    @Volatile
+    var diffHistorySink: ((String) -> Unit)? = null
+
+    /**
      * ⭐ 当前行程序号：记录状态机每完成一次「未记录 → 记录中」迁移就 +1。
      * 停车等红灯不会结束行程（[isRecording] 是锁存的），所以一次骑行只占一条。
+     *
+     * ⚠️ 恢复历史后会被抬到已有记录的最大 tripId，保证新行程编号不撞车
+     *    （否则新进程又从 1 开始，会「替换」掉上次 APP 运行留下的第 1 条）。
      */
     @Volatile
     private var tripSeq: Long = 0L
@@ -217,6 +230,59 @@ class SessionSpeedTracker : ViewModel() {
         } else {
             listOf(entry) + previous.take(MAX_DIFF_HISTORY - 1)
         }
+        persistDiffHistory()
+    }
+
+    // ==================== ⭐ 跨 APP 重启的落盘 / 恢复 ====================
+
+    /**
+     * 纯文本行格式：每行一条，`|` 分隔 6 个字段
+     * `tripId|diffMv|date|cellIndex|cellVolt|deviationMv`。
+     * 字段都是数字 / MM-dd，不含分隔符，无需转义；损坏行在恢复时跳过。
+     */
+    fun encodeDiffHistory(): String = diffHistory.joinToString("\n") { e ->
+        listOf(
+            e.tripId.toString(), e.diffMv.toString(), e.date,
+            e.cellIndex.toString(), e.cellVolt.toString(), e.deviationMv.toString(),
+        ).joinToString("|")
+    }
+
+    /**
+     * 冷启动恢复（YybmsApp 创建 Application 级单例时调用一次）。
+     *
+     * - 只保留能完整解析的行，任何字段坏掉就跳过那一行，不让一条脏数据毁掉整页；
+     * - 按 tripId 倒序（最新在最上），最多取 [MAX_DIFF_HISTORY] 条；
+     * - [tripSeq] 抬到已有最大 tripId，下一次行程才会用全新编号追加，
+     *   不会把上一次 APP 运行的记录当成「同一行程」替换掉。
+     */
+    fun restoreDiffHistory(raw: String) {
+        if (raw.isBlank()) return
+        val rows = raw.lineSequence().mapNotNull { line ->
+            val p = line.split('|')
+            if (p.size != 6) return@mapNotNull null
+            val tripId = p[0].toLongOrNull() ?: return@mapNotNull null
+            val diffMv = p[1].toFloatOrNull() ?: return@mapNotNull null
+            val cellIndex = p[3].toIntOrNull() ?: return@mapNotNull null
+            val cellVolt = p[4].toFloatOrNull() ?: return@mapNotNull null
+            val deviationMv = p[5].toFloatOrNull() ?: return@mapNotNull null
+            DiffHistoryEntry(
+                tripId = tripId, diffMv = diffMv, date = p[2],
+                cellIndex = cellIndex, cellVolt = cellVolt, deviationMv = deviationMv,
+            )
+        }
+            // 按行程序号倒序 = 最新在最上；即使落盘串的行序被写乱也能自愈
+            .sortedByDescending { it.tripId }
+            .take(MAX_DIFF_HISTORY)
+            .toList()
+        diffHistory = rows
+        var maxTrip = 0L
+        for (r in rows) if (r.tripId > maxTrip) maxTrip = r.tripId
+        tripSeq = maxTrip
+    }
+
+    /** 只在真正变化时落盘；没有注入回调（纯 JVM 单测）时是 no-op */
+    private fun persistDiffHistory() {
+        diffHistorySink?.invoke(encodeDiffHistory())
     }
 
     /**
@@ -942,12 +1008,16 @@ class SessionSpeedTracker : ViewModel() {
     }
 
 
-    // ==================== ⭐ 会话持久化（跨进程被杀） ====================
+    // ==================== ⭐ 会话重置 ====================
 
     /**
-     * 手动清空全部会话数据（诊断面板的「清空本次会话」按钮用）。
+     * 手动清空全部会话数据（数据页底部的「清空本次会话」按钮用）。
      *
      * 曲线队列也一并清掉 —— 否则会出现「累加器归零但曲线还在」的自相矛盾。
+     *
+     * ⚠️ 压差历史是**跨 APP 重启持久化**的（用户要求一直能显示），
+     *    所以这里必须同步把落盘写成空串；否则用户明明点了清空，
+     *    重开 APP 旧记录又会「复活」。
      */
     fun resetSession() {
         maxSpeed = 0
@@ -975,6 +1045,7 @@ class SessionSpeedTracker : ViewModel() {
         diffPoints.clear()
         diffHistory = emptyList()
         tripSeq = 0L             // ⭐ 会话清空 = 行程计数重新从 1 开始
+        persistDiffHistory()     // ⭐ 同步清掉落盘，避免重开 APP 旧记录「复活」
         java.util.Arrays.fill(peakRecords, null)
         _peakRevision.update { it + 1 }
         // ⭐ maxSpeed 也归零了，必须通知订阅方（悬浮窗的「极速」），

@@ -52,6 +52,15 @@ class YybmsApp : Application() {
     }
 
     /**
+     * ⭐ 最大压差单体历史的**独立落盘**（用户 2026-11-09：重开 APP 也要一直显示）。
+     *
+     * 与设备缓存同理，用单独 SP 文件，避免被任何设置重置顺手清掉。
+     */
+    val diffHistoryCache: io.github.supit.rideassist.data.prefs.DiffHistoryPrefs by lazy {
+        io.github.supit.rideassist.data.prefs.DiffHistoryPrefs(this)
+    }
+
+    /**
      * ⭐⭐⭐ 会话记录器 —— **应用级单例**（原为 Activity 作用域 ViewModel）。
      *
      * ## 为什么升到 Application 作用域
@@ -61,9 +70,18 @@ class YybmsApp : Application() {
      *
      * 语义仍然等价于「本次会话」：退出 APP 进程即重置，
      * 且**不做跨进程恢复** —— 退出 APP 即全新会话（2026-10-20 用户要求）。
+     *
+     * ⚠️ **唯一例外**：聚焦压差卡下面的「最大压差单体历史」。
+     *    用户 2026-11-09 明确要求它「一直能显示、重开 APP 不能不见」，
+     *    所以创建单例时先从 [diffHistoryCache] 恢复，再挂上写回回调。
+     *    其余曲线 / 峰值 / 统计仍是纯内存，不受影响。
      */
     val sessionTracker: io.github.supit.rideassist.ui.realtime.SessionSpeedTracker by lazy {
-        io.github.supit.rideassist.ui.realtime.SessionSpeedTracker()
+        io.github.supit.rideassist.ui.realtime.SessionSpeedTracker().also { tracker ->
+            // ⚠️ 顺序不能反：先恢复，再挂写回回调；否则恢复动作会被当成一次新变更写回去
+            tracker.restoreDiffHistory(diffHistoryCache.raw)
+            tracker.diffHistorySink = { raw -> diffHistoryCache.raw = raw }
+        }
     }
 
     /**

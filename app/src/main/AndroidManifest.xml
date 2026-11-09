@@ -82,6 +82,13 @@
             android:label="@string/title_settings"
             android:parentActivityName=".ui.main.MainActivity" />
 
+        <!-- ⭐ 首页连接卡齿轮进入的独立「连接设置」页（不与胎压设置页共享） -->
+        <activity
+            android:name=".ui.settings.ConnectionSettingsActivity"
+            android:exported="false"
+            android:label="@string/connection_settings"
+            android:parentActivityName=".ui.main.MainActivity" />
+
         <!--
           ⚠️ 诊断页只读展示本机自有数据、不含任何凭据，
           但仍按最小暴露面原则保持 exported=false（只能从设置页进入）。

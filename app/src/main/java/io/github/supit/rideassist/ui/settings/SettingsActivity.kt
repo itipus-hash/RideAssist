@@ -1,8 +1,6 @@
 package io.github.supit.rideassist.ui.settings
 
 import android.os.Bundle
-import android.view.View
-import android.widget.AdapterView
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
@@ -12,13 +10,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.supit.rideassist.R
 import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.databinding.ActivitySettingsBinding
-import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.util.RelativeTime
 
 /**
- * 设置页（2026-10-20 重构 / 2026-11-09 新增）：
- * 连接设置与 BMS 报警开关已移入**诊断面板**（用户要求）。本页现在包含：
- * - **连接成功后自动跳转标签页**（首页连接卡齿轮入口，默认「首页」）
+ * ⭐ 胎压设置页（2026-10-20 重构 / 2026-11-09 再次拆分）：
+ * 连接设置与 BMS 报警开关已移入**信息面板**；连接卡齿轮的「连接后跳转」
+ * 拆到独立的 [ConnectionSettingsActivity]（用户要求两处设置不共享界面）。
+ * 本页只保留：
  * - 胎压告警阈值（低压/高压/高温）
  * - 已绑定传感器信息（只读；绑定/解绑在首页胎压卡长按操作）
  */
@@ -44,7 +42,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        setupConnectJumpTab()
         setupTpmsThresholds()
         setupBatteryModel()
 
@@ -54,41 +51,6 @@ class SettingsActivity : AppCompatActivity() {
             repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
                 tpms.state.collect { refreshBoundInfo(it) }
             }
-        }
-    }
-
-    // ==================== 连接成功后自动跳转标签页 ====================
-
-    /**
-     * ⭐ 设置页第一项（用户 2026-11-09）：连接保护板成功后自动切到哪个标签页。
-     * 默认「首页」，可下拉选 实时 / 数据 / 导航 / 不跳转。
-     *
-     * ⚠️ Spinner 在首次 layout 时会自动回调一次 `onItemSelected`。
-     *    这里用「值没变就不写」挡住这次回调：既不会把默认值误写进 SP，
-     *    也不会因监听器注册顺序不同而把用户已保存的选择覆盖掉。
-     *
-     * ⚠️ `keys` 顺序必须与 `R.array.connect_jump_tab_labels` 完全一致。
-     */
-    private fun setupConnectJumpTab() {
-        val keys = listOf(
-            AppPrefs.TAB_HOME,
-            AppPrefs.TAB_REALTIME,
-            AppPrefs.TAB_DATA,
-            AppPrefs.TAB_OVERLAY,
-            AppPrefs.TAB_NONE,
-        )
-        val spinner = binding.spinnerConnectJumpTab
-        val saved = keys.indexOf(prefs.connectJumpTab)
-        spinner.setSelection(if (saved >= 0) saved else 0, false)
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>, view: View?, position: Int, id: Long,
-            ) {
-                val key = keys.getOrElse(position) { AppPrefs.TAB_HOME }
-                if (prefs.connectJumpTab != key) prefs.connectJumpTab = key
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) = Unit
         }
     }
 

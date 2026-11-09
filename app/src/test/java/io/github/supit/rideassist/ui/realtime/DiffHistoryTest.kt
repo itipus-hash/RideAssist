@@ -8,13 +8,15 @@ import org.junit.Test
 /**
  * 压差历史卡的数据口径单测（2026-11-09 用户修正后的口径）。
  *
- * 新的三条规则：
+ * 新的四条规则：
  * 1. **单次行程只记录一次**（同行程压差创新高是「替换」，不是追加）；
  * 2. **压差没超过 50mV 不记录**；
- * 3. 最新行程在最上，最多 10 条。
+ * 3. 最新行程在最上，最多 10 条；
+ * 4. **跨 APP 重启保留**（用户 2026-11-09：「要一直能显示」），编解码可往返、
+ *    恢复后新行程编号不能与旧记录撞车、清空会话要同步清空落盘。
  *
  * 实机上「压差创新高」是可遇不可求的偶发事件，靠截图等不到，
- * 所以把行程边界、阈值与字段口径钉死在纯 JVM 测试里。
+ * 所以把行程边界、阈值、字段口径与落盘格式钉死在纯 JVM 测试里。
  *
  * 行程靠 [SessionSpeedTracker.updateRecordingState] 的 `false→true` 迁移驱动，
  * 测试注入 `nowMs` 来模拟「断连超过 3 分钟」以结束一次行程。
@@ -164,5 +166,70 @@ class DiffHistoryTest {
         t.updatePeak(SessionSpeedTracker.CARD_DIFF, 80f, frame(3.850f))
         assertEquals(1, t.diffHistory.size)
         assertEquals(1L, t.diffHistory[0].tripId)
+    }
+
+    @Test
+    fun `历史可编码落盘 重开APP恢复后字段一致且新行程编号不撞车`() {
+        val t = SessionSpeedTracker()
+        startTrip(t)
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 80f, frame(3.900f))
+        endTrip(t)
+        startTrip(t)
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 60f, frame(3.850f))
+
+        val raw = t.encodeDiffHistory()
+        assertEquals(2, raw.lines().size)
+
+        // 模拟「杀掉 APP 重开」：全新 Tracker，只有这一串落盘数据
+        val reopened = SessionSpeedTracker()
+        reopened.restoreDiffHistory(raw)
+        assertEquals(t.diffHistory, reopened.diffHistory)
+        assertEquals(2, reopened.diffHistory.size)
+        assertEquals(80f, reopened.diffHistory[1].diffMv, 0.0001f)
+        assertEquals(3.850f, reopened.diffHistory[0].cellVolt, 0.0001f)
+
+        // ⭐ 新行程必须用全新编号追加；否则会从 1 开始，
+        //    把上次 APP 运行留下的记录当成「同一行程」替换掉（历史越用越少）。
+        startTrip(reopened)
+        reopened.updatePeak(SessionSpeedTracker.CARD_DIFF, 70f, frame(3.800f))
+        assertEquals(3, reopened.diffHistory.size)
+        assertTrue(reopened.diffHistory[0].tripId > t.diffHistory[0].tripId)
+        assertEquals(3.800f, reopened.diffHistory[0].cellVolt, 0.0001f)
+        assertEquals(3.850f, reopened.diffHistory[1].cellVolt, 0.0001f)
+    }
+
+    @Test
+    fun `只在历史变化时才触发落盘 清空会话同步清空落盘`() {
+        val t = SessionSpeedTracker()
+        var saved = ""
+        t.diffHistorySink = { saved = it }
+
+        startTrip(t)
+        assertEquals("", saved)     // 只开了行程，还没有压差记录
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 80f, frame(3.900f))
+        assertTrue(saved.isNotEmpty())
+        assertEquals(1, saved.lines().size)
+
+        // 同行程内压差没创新高 → 不写盘（不是每帧写 SP）
+        val snapshot = saved
+        t.updatePeak(SessionSpeedTracker.CARD_DIFF, 70f, frame(3.880f))
+        assertEquals(snapshot, saved)
+
+        t.resetSession()
+        assertEquals("", saved)     // 否则重开 APP 旧记录会「复活」
+    }
+
+    @Test
+    fun `落盘串损坏时跳过坏行 且恢复最多10条`() {
+        val t = SessionSpeedTracker()
+        t.restoreDiffHistory("garbage\n1|2|3\n\n5|80.0|11-09|3|3.9|150.0|extra")
+        assertTrue(t.diffHistory.isEmpty())
+
+        val many = (1..15).joinToString("\n") { i ->
+            "$i|60.0|11-09|3|3.900|150.0"
+        }
+        t.restoreDiffHistory(many)
+        assertEquals(SessionSpeedTracker.MAX_DIFF_HISTORY, t.diffHistory.size)
+        assertEquals(15L, t.diffHistory[0].tripId)
     }
 }

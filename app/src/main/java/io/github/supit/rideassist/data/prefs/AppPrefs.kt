@@ -190,17 +190,27 @@ class AppPrefs(context: Context) {
         get() = sp.getBoolean("overlay_jump_on_nav", true)
         set(value) = sp.edit { putBoolean("overlay_jump_on_nav", value) }
 
-    // ==================== 连接成功后的自动跳转 ====================
+    // ==================== 连接后的自动跳转 ====================
 
     /**
-     * ⭐ **连接保护板成功后自动切到哪个标签页**（用户 2026-11-09）。
+     * ⭐ **连接保护板后切到哪个标签页**（用户 2026-11-09 / 同日简化）。
      *
-     * 默认 [TAB_HOME]（主页）。可选其它三个底部标签页，或 [TAB_NONE]（不跳转）。
+     * 默认 [TAB_HOME]（主页）。选项只有 4 个底部标签页 ——
+     * 「首页」本身就等于不跳转，所以不再单列「不跳转」。
      * 只在「未连接 → 已连接」的上升沿生效一次，回前台 / 页面重建不会重复跳。
+     *
+     * ⚠️ 读写都做白名单归一：v1.0.36 曾写入过 `"none"`（旧「不跳转」），
+     *    老用户升级后这个遗留值必须按「首页」处理，不能让下拉框落空、
+     *    也不能把它当成未知值悄悄关掉跳转。
      */
     var connectJumpTab: String
-        get() = sp.getString(KEY_CONNECT_JUMP_TAB, TAB_HOME) ?: TAB_HOME
-        set(value) = sp.edit { putString(KEY_CONNECT_JUMP_TAB, value) }
+        get() {
+            val saved = sp.getString(KEY_CONNECT_JUMP_TAB, TAB_HOME) ?: TAB_HOME
+            return if (saved in VALID_JUMP_TABS) saved else TAB_HOME
+        }
+        set(value) = sp.edit {
+            putString(KEY_CONNECT_JUMP_TAB, if (value in VALID_JUMP_TABS) value else TAB_HOME)
+        }
 
     /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
     var overlayShowSpace: Boolean
@@ -391,13 +401,14 @@ class AppPrefs(context: Context) {
     }
 
     companion object {
-        // 连接成功后自动跳转的目标标签页（与底部导航四个 id 一一对应）
+        // 连接后跳转的目标标签页（与底部导航四个 id 一一对应）
         const val TAB_HOME = "home"
         const val TAB_REALTIME = "realtime"
         const val TAB_DATA = "data"
         const val TAB_OVERLAY = "overlay"
-        /** 「不跳转」：保持用户当前所在页 */
-        const val TAB_NONE = "none"
+
+        /** 合法值白名单；v1.0.36 的遗留值 "none"（旧「不跳转」）会被归一成首页 */
+        private val VALID_JUMP_TABS = setOf(TAB_HOME, TAB_REALTIME, TAB_DATA, TAB_OVERLAY)
 
         private const val KEY_CONNECT_JUMP_TAB = "connect_jump_tab"
         private const val KEY_LAST_MAC = "last_device_mac"

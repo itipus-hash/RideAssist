@@ -732,10 +732,11 @@ class RealtimeFragment : Fragment(), LocationListener {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        // ⭐⭐ 2026-10-20 改版：**退出 APP = 全新会话**（用户最新要求）。
-        // 旧逻辑「3 分钟内重开恢复上次会话」已按用户要求移除 ——
-        // 现在骑行数据/峰值记录只存在于进程内存中，退出即清零。
-        // （会话不落盘：退出 APP = 全新会话，见 2026-10-20 用户要求）
+        // ⭐⭐ 2026-10-20 改版：**退出 APP = 全新会话**（用户要求）。
+        // 旧逻辑「3 分钟内重开恢复上次会话」已移除 ——
+        // 骑行数据 / 峰值记录 / 曲线只存在于进程内存，退出即清零。
+        // ⚠️ 2026-11-09 唯一例外：聚焦压差卡下面的「最大压差单体历史」按用户要求
+        //    单独落盘，跨 APP 重启保留（由 YybmsApp 恢复，本页照常读 tracker 渲染）。
         super.onViewCreated(view, savedInstanceState)
         // 回填会话记录（Fragment重建 / 断连 / 切页回来后仍保留）
         // ⚠️ 只重绘，**不push 新采样点**，否则回填动作会污染曲线
@@ -1260,6 +1261,8 @@ class RealtimeFragment : Fragment(), LocationListener {
      * 列表最新在最上，顺序由 [SessionSpeedTracker.diffHistory] 保证；
      * **一条 = 一次行程**（压差没超过 50mV 的行程不记），
      * 同行程内压差再创新高只会替换那一条，不会追加。
+     * ⭐ 这份历史单独落盘，重开 APP 仍在（用户 2026-11-09 要求「一直能显示」）；
+     * 只有用户显式点「清空本次会话」才会连同其它会话数据一起清空。
      *
      * ⚠️ 行是复用的：数据每秒刷新，但历史只在压差创本行程新高 / 换新行程时才变化，
      * 每帧重建 10 个 TextView 会白白触发 measure/layout。

@@ -27,7 +27,7 @@ import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.databinding.FragmentMonitorBinding
 import io.github.supit.rideassist.ui.diag.DiagActivity
 import io.github.supit.rideassist.ui.main.MainActivity
-import io.github.supit.rideassist.ui.settings.SettingsActivity
+import io.github.supit.rideassist.ui.settings.ConnectionSettingsActivity
 import io.github.supit.rideassist.util.RelativeTime
 import io.github.supit.rideassist.util.VibrateHelper
 import kotlinx.coroutines.flow.first
@@ -1045,10 +1045,10 @@ class MonitorFragment : Fragment() {
         // 扫描按钮 → 弹出设备列表对话框
         binding.btnScan.setOnClickListener { requestScanAndShowDialog() }
 
-        // ⭐ 连接卡右上角齿轮 → 设置页（连接成功后自动跳转等设置）。
+        // ⭐ 连接卡右上角齿轮 → **独立的连接设置页**（不是胎压那个设置页）。
         //    按钮只在 CONNECTED 时由 renderConnectionState 显示。
         binding.btnConnectionSettings.setOnClickListener {
-            startActivity(Intent(requireContext(), SettingsActivity::class.java))
+            startActivity(Intent(requireContext(), ConnectionSettingsActivity::class.java))
         }
 
         // ⭐ 长按「已连接」卡片 → 弹出蓝牙扫描，方便换连别的保护板

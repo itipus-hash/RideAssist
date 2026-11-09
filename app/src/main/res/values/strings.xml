@@ -26,21 +26,18 @@
     <string name="cancel_auto_connect">取消自动连接</string>
     <string name="auto_connect_cancelled">已取消自动连接</string>
 
-    <!-- ⭐ 首页连接卡右上角的齿轮：连上保护板后才出现，点进设置页 -->
+    <!-- ⭐ 首页连接卡右上角的齿轮：连上保护板后才出现，点进独立的连接设置页 -->
     <string name="connection_settings">连接设置</string>
 
-    <!-- ⭐ 设置页第一项：连接成功后自动跳转标签页（默认主页） -->
-    <string name="setting_connect_jump_title">连接成功后自动跳转</string>
-    <string name="setting_connect_jump_desc">保护板连接成功时，自动切换到所选标签页。默认「首页」；选「不跳转」则保持当前页。</string>
-    <string name="setting_connect_jump_label">目标标签页</string>
-    <string name="connect_jump_none">不跳转</string>
-    <!-- ⚠️ 顺序必须与 SettingsActivity.setupConnectJumpTab() 里的 keys 完全一致 -->
+    <!-- ⭐ 连接设置页唯一一项（用户 2026-11-09）：文字在左、下拉框直接在右，
+         不写任何说明 / 提示；「首页」本身即不跳转，故不再单列「不跳转」选项。 -->
+    <string name="setting_connect_jump_title">连接后跳转</string>
+    <!-- ⚠️ 顺序必须与 ConnectionSettingsActivity.setupConnectJumpTab() 里的 keys 完全一致 -->
     <string-array name="connect_jump_tab_labels">
         <item>@string/nav_home</item>
         <item>@string/nav_realtime</item>
         <item>@string/nav_data</item>
         <item>@string/nav_overlay</item>
-        <item>@string/connect_jump_none</item>
     </string-array>
     <string name="bluetooth_off_title">蓝牙未开启</string>
     <string name="bluetooth_off_msg">本应用需要蓝牙连接彦阳保护板，请先开启蓝牙。</string>
