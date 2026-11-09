@@ -29,7 +29,7 @@
     <!-- ⭐ 首页连接卡右上角的齿轮：连上保护板后才出现，点进独立的连接设置页 -->
     <string name="connection_settings">连接设置</string>
 
-    <!-- ⭐ 连接设置页唯一一项（用户 2026-11-09）：文字在左、下拉框直接在右，
+    <!-- ⭐ 连接设置页第一项（用户 2026-11-09）：文字在左、下拉框直接在右，
          不写任何说明 / 提示；「首页」本身即不跳转，故不再单列「不跳转」选项。 -->
     <string name="setting_connect_jump_title">连接后跳转</string>
     <!-- ⚠️ 顺序必须与 ConnectionSettingsActivity.setupConnectJumpTab() 里的 keys 完全一致 -->
@@ -38,6 +38,18 @@
         <item>@string/nav_realtime</item>
         <item>@string/nav_data</item>
         <item>@string/nav_overlay</item>
+    </string-array>
+
+    <!-- ⭐ 连接设置页第二项（用户 2026-11-09）：实时曲线默认。
+         同样是一行文字 + 右侧下拉框，不写任何说明 / 提示。
+         ⚠️ 顺序必须与 ConnectionSettingsActivity.setupCurveDefault() 的
+            position==0 → true（显示）/ position==1 → false（不显示）一致。 -->
+    <string name="setting_curve_default_title">实时曲线默认</string>
+    <string name="curve_default_show">显示曲线</string>
+    <string name="curve_default_hide">不显示曲线</string>
+    <string-array name="curve_default_labels">
+        <item>@string/curve_default_show</item>
+        <item>@string/curve_default_hide</item>
     </string-array>
     <string name="bluetooth_off_title">蓝牙未开启</string>
     <string name="bluetooth_off_msg">本应用需要蓝牙连接彦阳保护板，请先开启蓝牙。</string>

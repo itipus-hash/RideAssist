@@ -212,6 +212,25 @@ class AppPrefs(context: Context) {
             putString(KEY_CONNECT_JUMP_TAB, if (value in VALID_JUMP_TABS) value else TAB_HOME)
         }
 
+    // ==================== 实时曲线默认显示 ====================
+
+    /**
+     * ⭐ **进入实时页时曲线是否默认显示**（用户 2026-11-09）。
+     *
+     * `false`（默认）= 不显示曲线，保持 2026-11-08「打开 APP 默认不显示曲线」
+     * 的既有体验；`true` = 进入实时页直接是 `LIVE`（实时曲线）。
+     *
+     * 只决定**进入时的初始状态**：用户仍可双击在
+     * 不显示 → 实时 → 历史 三态间自由切换，切换结果在本页停留期间保留；
+     * 下次进入实时页再按本偏好复位。
+     *
+     * ⚠️ 聚焦模式仍按既有规则强制隐藏曲线（`onCardFocused` 里 setCurveMode(OFF)），
+     *    本偏好只作用于实时页主布局，不改聚焦态行为。
+     */
+    var realtimeCurveShowByDefault: Boolean
+        get() = sp.getBoolean(KEY_REALTIME_CURVE_SHOW, false)
+        set(value) = sp.edit { putBoolean(KEY_REALTIME_CURVE_SHOW, value) }
+
     /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
     var overlayShowSpace: Boolean
         get() = sp.getBoolean("overlay_show_space", false)
@@ -411,6 +430,7 @@ class AppPrefs(context: Context) {
         private val VALID_JUMP_TABS = setOf(TAB_HOME, TAB_REALTIME, TAB_DATA, TAB_OVERLAY)
 
         private const val KEY_CONNECT_JUMP_TAB = "connect_jump_tab"
+        private const val KEY_REALTIME_CURVE_SHOW = "realtime_curve_show"
         private const val KEY_LAST_MAC = "last_device_mac"
         private const val KEY_LAST_NAME = "last_device_name"
         private const val KEY_AUTO_CONNECT = "auto_connect_enabled"

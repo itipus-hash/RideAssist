@@ -3,10 +3,11 @@
   ⭐ 独立的「连接设置」页（用户 2026-11-09 要求）：
   从首页连接状态卡的齿轮进来，只放连接相关设置，**不与胎压设置页共享**。
 
-  当前只有一项：「连接后跳转」。按用户要求：
-  - 一行搞定：左边文字，右边直接是下拉框；
+  目前两项：「连接后跳转」与「实时曲线默认」（2026-11-09 新增）。按用户要求：
+  - 每项一行搞定：左边文字，右边直接是下拉框；
   - 不写任何说明 / 提示文案；
-  - 选项只有 4 个标签页，「首页」本身就等于不跳转，不再单列「不跳转」。
+  - 「连接后跳转」选项只有 4 个标签页，「首页」本身就等于不跳转，
+    不再单列「不跳转」。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -41,23 +42,55 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="0dp"
+                    <!-- 第一项：连接后跳转 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/setting_connect_jump_title"
-                        android:textSize="14sp" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                    <Spinner
-                        android:id="@+id/spinner_connect_jump_tab"
-                        android:layout_width="wrap_content"
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_connect_jump_title"
+                            android:textSize="14sp" />
+
+                        <Spinner
+                            android:id="@+id/spinner_connect_jump_tab"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:entries="@array/connect_jump_tab_labels"
+                            android:minWidth="120dp"
+                            android:spinnerMode="dropdown" />
+                    </LinearLayout>
+
+                    <!-- 第二项（2026-11-09）：进入实时页时曲线是否默认显示。
+                         风格与第一项完全一致：一行文字 + 右侧下拉，无任何提示。 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:entries="@array/connect_jump_tab_labels"
-                        android:minWidth="120dp"
-                        android:spinnerMode="dropdown" />
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_curve_default_title"
+                            android:textSize="14sp" />
+
+                        <Spinner
+                            android:id="@+id/spinner_realtime_curve_default"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:entries="@array/curve_default_labels"
+                            android:minWidth="120dp"
+                            android:spinnerMode="dropdown" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>

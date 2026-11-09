@@ -17,8 +17,10 @@ import io.github.supit.rideassist.databinding.ActivityConnectionSettingsBinding
  * 连接设置是「连上保护板之后才用得上」的东西，混进胎压页既不好找，
  * 也会让两处设置互相挤占版面。
  *
- * 目前只有一项：**连接后跳转** —— 文字在左、下拉框直接在右，
- * 没有说明文案，也没有「不跳转」（选「首页」就等于不跳转）。
+ * 目前两项，风格一致（文字在左、下拉框直接在右、无说明文案）：
+ * 1. **连接后跳转** —— 连上保护板后切到哪个标签页，默认「首页」；
+ * 2. **实时曲线默认**（2026-11-09 新增）—— 进入实时页时曲线默认
+ *    「显示曲线」还是「不显示曲线」，默认后者（保持旧体验）。
  */
 class ConnectionSettingsActivity : AppCompatActivity() {
 
@@ -44,6 +46,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
         }
 
         setupConnectJumpTab()
+        setupCurveDefault()
     }
 
     /**
@@ -68,6 +71,35 @@ class ConnectionSettingsActivity : AppCompatActivity() {
             ) {
                 val key = keys.getOrElse(position) { AppPrefs.TAB_HOME }
                 if (prefs.connectJumpTab != key) prefs.connectJumpTab = key
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) = Unit
+        }
+    }
+
+    /**
+     * ⭐ **实时曲线默认**（用户 2026-11-09）：决定进入实时页时曲线是
+     * 「显示曲线」（LIVE）还是「不显示曲线」（OFF），由实时页在切入时
+     * 读取本偏好复位初始状态。
+     *
+     * ⚠️ `R.array.curve_default_labels` 顺序：0 = 显示曲线（true），
+     *    1 = 不显示曲线（false）。默认选 1，保持 2026-11-08「打开 APP
+     *    默认不显示曲线」的既有体验。
+     *
+     * ⚠️ 与 [setupConnectJumpTab] 同理，用「值没变就不写」挡住 Spinner
+     *    首次 layout 的自动回调，别把默认值当成用户选择写进 SP。
+     */
+    private fun setupCurveDefault() {
+        val spinner = binding.spinnerRealtimeCurveDefault
+        spinner.setSelection(if (prefs.realtimeCurveShowByDefault) 0 else 1, false)
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>, view: View?, position: Int, id: Long,
+            ) {
+                val show = position != 1
+                if (prefs.realtimeCurveShowByDefault != show) {
+                    prefs.realtimeCurveShowByDefault = show
+                }
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) = Unit
