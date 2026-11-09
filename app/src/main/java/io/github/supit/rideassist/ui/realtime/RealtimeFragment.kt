@@ -636,7 +636,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         b.tvRealtimeClock.visibility = overlayHidden
         // ⭐ 聚焦时归零聚焦卡的 marginTop，间距统一由时间卡 marginBottom 承担
         applyFocusCardMargin(focus)
-        // ⭐「XX 记录卡」+ 压差历史卡只在聚焦时可见 → 切换聚焦目标时要跟着刷新
+        // ⭐「XX 记录卡」按聚焦目标刷新；压差历史卡常驻，切换聚焦时也要刷新一次
+        //   （空态/行显隐虽与聚焦无关，但统一走 renderPeakSection 保证不漏帧）
         renderPeakSection()
         // ⭐ 需求4：GPS 丢失提示卡只在「聚焦速度卡」时可见。
         // 非聚焦或聚焦其他卡时强制 GONE —— 普通布局下多一张卡会让速度卡高度跳动。
@@ -709,8 +710,9 @@ class RealtimeFragment : Fragment(), LocationListener {
         //   否则速度卡聚焦时是 0dp、其他三张卡聚焦时仍是 6dp → 间距不一致
         //   （用户反馈："压差/电流/功率聚焦时记录卡位置不对"）。
         setTopMargin(b.cardPeakRecord, if (focus == null) 0 else gap)
-        // 压差历史卡跟在记录卡下面，同样按聚焦态统一间距
-        setTopMargin(b.cardDiffHistory, if (focus == null) 0 else gap)
+        // ⭐ 压差历史卡已改为**常驻**（2026-11-09）：普通布局下也要保留 6dp 间距，
+        //    不能再按「聚焦附属卡」把 marginTop 归零，否则会紧贴上一张卡。
+        setTopMargin(b.cardDiffHistory, gap)
     }
 
     /** 设置 topMargin（已是目标像素值时跳过，避免重复触发 layout） */
@@ -1240,7 +1242,10 @@ class RealtimeFragment : Fragment(), LocationListener {
         CLOCK_FORMAT.format(java.util.Date())
 
     /**
-     * 峰值记录卡 + 压差历史卡同属「聚焦卡片下方的记录区块」，统一刷新。
+     * 峰值记录卡 + 压差历史卡统一刷新。
+     *
+     * 峰值记录卡仍只在聚焦且该卡有记录时出现；压差历史卡 2026-11-09 起
+     * **常驻显示**（无记录时显示占位文案），两者都由这里刷新。
      *
      * 两个刷新入口：切换聚焦目标（[applyCardVisibility]）与每帧 BMS 数据
      * （[observeBatteryData]）。后者必要 —— 峰值由**应用级采集器**写入，
@@ -1256,8 +1261,10 @@ class RealtimeFragment : Fragment(), LocationListener {
     /**
      * 渲染「最近 10 次行程的最大压差单体」历史卡。
      *
-     * 只在**聚焦压差卡且有记录**时可见 —— 与峰值记录卡同生同灭，
-     * 普通布局 / 聚焦其他卡时强制 GONE，避免多一张卡造成高度跳动。
+     * ⭐ 2026-11-09 用户要求：**常驻显示**（对齐「数据」页的「峰值记录」），
+     * 不再只在「聚焦压差卡且有记录」时出现。列表为空时显示
+     * 「暂无压差＞50mV记录」占位，让用户知道这块功能存在、只是还没触发过。
+     *
      * 列表最新在最上，顺序由 [SessionSpeedTracker.diffHistory] 保证；
      * **一条 = 一次行程**（压差没超过 50mV 的行程不记），
      * 同行程内压差再创新高只会替换那一条，不会追加。
@@ -1268,13 +1275,20 @@ class RealtimeFragment : Fragment(), LocationListener {
      * 每帧重建 10 个 TextView 会白白触发 measure/layout。
      * Fragment 重建时容器是全新的（childCount=0），自然重新创建，
      * 所以**不要**把 View 缓存到 Fragment 字段里（会持有已销毁的布局）。
+     * ⚠️ `llDiffHistory` 里只有数据行；标题与空态是它的兄弟节点，
+     *    否则行循环会把它们当数据行改写掉。
      */
     private fun renderDiffHistoryCard() {
         val b = _binding ?: return
         val rows = tracker.diffHistory
-        val visible = focusedCardIndex == CARD_DIFF && rows.isNotEmpty()
-        b.cardDiffHistory.visibility = if (visible) View.VISIBLE else View.GONE
-        if (!visible) return
+        // 常驻：普通布局 / 聚焦其它卡 / 无记录，都显示这张卡。
+        if (b.cardDiffHistory.visibility != View.VISIBLE) {
+            b.cardDiffHistory.visibility = View.VISIBLE
+        }
+        val emptyVisibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        if (b.tvDiffHistoryEmpty.visibility != emptyVisibility) {
+            b.tvDiffHistoryEmpty.visibility = emptyVisibility
+        }
 
         val container = b.llDiffHistory
         val rowGapPx = (4 * resources.displayMetrics.density).toInt()

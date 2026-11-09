@@ -555,28 +555,51 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- ============ 最近 10 次「最大压差」的单体历史 ============
-             ⭐ 只在**聚焦压差卡**时显示，跟在峰值记录卡下面；无记录时整卡 GONE。
-             一行一条、最新在最上，格式见 @string/diff_history_row：
-                 11-09 单体14 @ 3.946V 偏离 82.1mV
-             ⚠️ 行是代码动态复用创建的 TextView（历史最多 10 条，写死 10 个
-                TextView 会让布局膨胀），容器只负责纵向排列 + 统一内边距。
-             ⚠️ 不加标题行：聚焦模式常在分屏下用，多一行就多一次滚动。 -->
+             ⭐ 2026-11-09 用户要求改为**常驻卡**（对齐「数据」页的「峰值记录」）：
+                不再只在聚焦压差卡时出现，普通布局 / 聚焦其它卡也一直显示；
+                没有记录时显示占位文案「暂无压差＞50mV记录」。
+             ⭐ 一条 = 一次行程（压差 > 50mV 才记），一行一条、最新在最上，
+                格式见 @string/diff_history_row：11-09 单体14 @ 3.946V 偏离 82.1mV
+             ⚠️ 行是代码动态复用创建的 TextView（最多 10 条）。容器 ll_diff_history
+                **只放行**；标题与空态是它的兄弟节点，否则行循环会把它们
+                当成数据行强转成 TextView 改写掉。 -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/card_diff_history"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:visibility="gone"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp">
 
             <LinearLayout
-                android:id="@+id/ll_diff_history"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="12dp" />
+                android:padding="12dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/diff_history_title" />
+
+                <LinearLayout
+                    android:id="@+id/ll_diff_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/tv_diff_history_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/diff_history_empty"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
