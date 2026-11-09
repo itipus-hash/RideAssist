@@ -958,151 +958,8 @@ class SessionSpeedTracker : ViewModel() {
             .apply()
     }
 
-    /**
-     * 恢复上次会话的 [maxSpeed]（仅当距上次活跃**不足** [MAX_KEEP_MS] 时）。
-     *
-     * @return true = 已恢复（沿用旧值）；false = 间隔太久已重置为 0
-     */
-    fun restoreMaxSpeed(context: android.content.Context): Boolean {
-        val sp = context.getSharedPreferences(SP_NAME, android.content.Context.MODE_PRIVATE)
-        val last = sp.getLong(KEY_LAST_ACTIVE, 0L)
-        val saved = sp.getInt(KEY_MAX_SPEED, 0)
-        val elapsed = System.currentTimeMillis() - last
-        // ⚠️ last=0 说明从未记录过 → 清零
-        if (last == 0L || elapsed >= MAX_KEEP_MS) {
-            maxSpeed = 0
-            _speedRevision.update { it + 1 }   // ⭐ 清零也是一次变更，订阅方要跟着重渲
-            return false
-        }
-        maxSpeed = saved
-        _speedRevision.update { it + 1 }
-        return true
-    }
 
     // ==================== ⭐ 会话持久化（跨进程被杀） ====================
-
-    /**
-     * ⭐⭐⭐ 把整个会话**落盘**。
-     *
-     * ## 为什么需要（不只是「曲线续上」）
-     * 之前会话数据全在 Activity 作用域的 ViewModel 里，进程被系统回收
-     * （息屏、切后台、内存紧张）就**全丢**。用户会认为「我明明在骑，
-     * 怎么打开 APP 里程归零了」。
-     *
-     * 落盘内容：全部累加器 + 峰值记录 + 电量快照 + SOC 跟踪起点。
-     * ⚠️ 曲线采样点**不落盘** —— 1800×4 个 Float 的 JSON 有 30KB+，
-     * 每秒写一次 SP 完全不可行；而曲线丢一段对用户没有感知（曲线是趋势看的）。
-     *
-     * @param throttleMs 距上次落盘的最小间隔。默认 30 秒 —— 每秒写 SP 会
-     *   造成明显 I/O，30 秒的粒度对「进程被杀」的场景足够（最多丢 30 秒）。
-     */
-    fun persistSession(context: android.content.Context, throttleMs: Long = 30_000L) {
-        val now = System.currentTimeMillis()
-        if (now - lastPersistMs < throttleMs) return
-        lastPersistMs = now
-
-        val sp = context.getSharedPreferences(SP_NAME, android.content.Context.MODE_PRIVATE)
-        val peaks = StringBuilder()
-        peakRecords.forEachIndexed { i, r ->
-            if (i > 0) peaks.append(';')
-            if (r == null) {
-                peaks.append('-')
-            } else {
-                // 逗号分隔：值,时刻,电流,最高芯,最高压,最低芯,最低压,异常芯,偏离
-                peaks.append(
-                    listOf(
-                        r.value, r.clock, r.current,
-                        r.maxCellIndex, r.maxCellVolt,
-                        r.minCellIndex, r.minCellVolt,
-                        r.outlierCellIndex, r.outlierDeviation,
-                    ).joinToString(",")
-                )
-            }
-        }
-        sp.edit()
-            .putInt(KEY_MAX_SPEED, maxSpeed)
-            .putLong(KEY_LAST_ACTIVE, now)
-            .putLong(KEY_RIDE_START, rideStartWallMs)
-            .putLong(KEY_RIDE_MOVING, rideMovingMs)
-            .putLong(KEY_LAST_TICK, rideLastTickMs)
-            .putLong(KEY_LAST_DATA, lastDataWallMs)
-            .putFloat(KEY_DISTANCE, distanceKm.toFloat())
-            .putFloat(KEY_ENERGY, energyWh.toFloat())
-            .putFloat(KEY_REGEN, regenWh.toFloat())
-            .putFloat(KEY_REMAIN_AH, latestRemainingAh)
-            .putFloat(KEY_NOMINAL_V, latestNominalVolt)
-            .putFloat(KEY_SOC_START, socStartSoc)
-            .putFloat(KEY_SOC_AH, socStartAh)
-            .putFloat(KEY_SOC_LAST, lastSocSeen)
-            .putFloat(KEY_RATED, ratedCapacitySnapshot)
-            .putString(KEY_PEAKS, peaks.toString())
-            .apply()
-    }
-
-    /**
-     * 从上次落盘恢复会话。
-     *
-     * ⚠️ **只恢复「距上次落盘不足 [MAX_KEEP_MS]（3 分钟）」的会话** ——
-     * 与 [restoreMaxSpeed] 同口径：短暂息屏/切后台要续上，
-     * 但隔天再打开时应该是一次全新的记录，否则新旧记录会混成一团。
-     *
-     * ⚠️ [rideLastTickMs] 用的是 `elapsedRealtime`（开机计时），
-     * **不能跨进程恢复** —— 恢复后必须置 0，
-     * 否则下一次积分的 `dtSec` 会算出一个巨大的荒谬值（跨了多久就算多久）。
-     */
-    fun restoreSession(context: android.content.Context): Boolean {
-        val sp = context.getSharedPreferences(SP_NAME, android.content.Context.MODE_PRIVATE)
-        val last = sp.getLong(KEY_LAST_ACTIVE, 0L)
-        if (last == 0L || System.currentTimeMillis() - last >= MAX_KEEP_MS) return false
-
-        rideStartWallMs = sp.getLong(KEY_RIDE_START, 0L)
-        rideMovingMs = sp.getLong(KEY_RIDE_MOVING, 0L)
-        lastDataWallMs = sp.getLong(KEY_LAST_DATA, 0L)
-        distanceKm = sp.getFloat(KEY_DISTANCE, 0f).toDouble()
-        energyWh = sp.getFloat(KEY_ENERGY, 0f).toDouble()
-        regenWh = sp.getFloat(KEY_REGEN, 0f).toDouble()
-        latestRemainingAh = sp.getFloat(KEY_REMAIN_AH, 0f)
-        latestNominalVolt = sp.getFloat(KEY_NOMINAL_V, 0f)
-        socStartSoc = sp.getFloat(KEY_SOC_START, 0f)
-        socStartAh = sp.getFloat(KEY_SOC_AH, 0f)
-        lastSocSeen = sp.getFloat(KEY_SOC_LAST, 0f)
-        ratedCapacitySnapshot = sp.getFloat(KEY_RATED, 0f)
-
-        // ⭐⚠️ elapsedRealtime 不能跨进程 —— 必须清零，
-        // 否则下一次积分会把「从关机到现在的全部时间」当成一帧 dt。
-        rideLastTickMs = 0L
-        lastSpeedKmh = 0.0
-
-        restorePeaks(sp.getString(KEY_PEAKS, "") ?: "")
-        return true
-    }
-
-    /** 解析落盘的峰值串（格式见 [persistSession]），解析失败整体丢弃 */
-    private fun restorePeaks(raw: String) {
-        if (raw.isBlank()) return
-        val parts = raw.split(';')
-        parts.forEachIndexed { i, seg ->
-            if (i >= CARD_COUNT) return@forEachIndexed
-            val rec = if (seg == "-") null else seg.split(",").let { f ->
-                if (f.size < 9) return@let null
-                PeakRecord(
-                    value = f[0].toFloatOrNull() ?: return@let null,
-                    clock = f[1],
-                    current = f[2].toFloatOrNull() ?: 0f,
-                    maxCellIndex = f[3].toFloatOrNull()?.toInt() ?: 0,
-                    maxCellVolt = f[4].toFloatOrNull() ?: 0f,
-                    minCellIndex = f[5].toFloatOrNull()?.toInt() ?: 0,
-                    minCellVolt = f[6].toFloatOrNull() ?: 0f,
-                    outlierCellIndex = f[7].toFloatOrNull()?.toInt() ?: 0,
-                    outlierDeviation = f[8].toFloatOrNull() ?: 0f,
-                )
-            }
-            peakRecords[i] = rec
-        }
-    }
-
-    /** 上次落盘时刻（ms），用于节流 */
-    private var lastPersistMs: Long = 0L
 
     /**
      * 手动清空全部会话数据（诊断面板的「清空本次会话」按钮用）。
@@ -1128,7 +985,6 @@ class SessionSpeedTracker : ViewModel() {
         socStartAh = 0f
         lastSocSeen = 0f
         ratedCapacitySnapshot = 0f
-        lastPersistMs = 0L
         speedPoints.clear()
         powerPoints.clear()
         currentPoints.clear()
@@ -1190,22 +1046,6 @@ class SessionSpeedTracker : ViewModel() {
         private const val SP_NAME = "yybms_session_peak"
         private const val KEY_MAX_SPEED = "max_speed"
         private const val KEY_LAST_ACTIVE = "last_active_ms"
-
-        // ==================== 会话持久化 ====================
-        private const val KEY_RIDE_START = "ride_start_ms"
-        private const val KEY_RIDE_MOVING = "ride_moving_ms"
-        private const val KEY_LAST_TICK = "last_tick_ms"
-        private const val KEY_LAST_DATA = "last_data_ms"
-        private const val KEY_DISTANCE = "distance_km"
-        private const val KEY_ENERGY = "energy_wh"
-        private const val KEY_REGEN = "regen_wh"
-        private const val KEY_REMAIN_AH = "remain_ah"
-        private const val KEY_NOMINAL_V = "nominal_v"
-        private const val KEY_SOC_START = "soc_start"
-        private const val KEY_SOC_AH = "soc_start_ah"
-        private const val KEY_SOC_LAST = "soc_last"
-        private const val KEY_RATED = "rated_ah"
-        private const val KEY_PEAKS = "peaks"
 
         /** 压差历史保留条数（用户指定 10 条 = 最近 10 次行程，最新在最上） */
         const val MAX_DIFF_HISTORY = 10

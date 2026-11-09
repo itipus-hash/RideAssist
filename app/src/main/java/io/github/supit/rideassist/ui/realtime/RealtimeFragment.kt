@@ -735,7 +735,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         // ⭐⭐ 2026-10-20 改版：**退出 APP = 全新会话**（用户最新要求）。
         // 旧逻辑「3 分钟内重开恢复上次会话」已按用户要求移除 ——
         // 现在骑行数据/峰值记录只存在于进程内存中，退出即清零。
-        // （restoreSession/restoreMaxSpeed 函数保留在 tracker 里但不再调用）
+        // （会话不落盘：退出 APP = 全新会话，见 2026-10-20 用户要求）
         super.onViewCreated(view, savedInstanceState)
         // 回填会话记录（Fragment重建 / 断连 / 切页回来后仍保留）
         // ⚠️ 只重绘，**不push 新采样点**，否则回填动作会污染曲线

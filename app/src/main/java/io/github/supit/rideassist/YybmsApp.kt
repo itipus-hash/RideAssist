@@ -60,7 +60,7 @@ class YybmsApp : Application() {
      * 2. **诊断面板在设置页里**：本来就不该依赖 MainActivity 的生命周期。
      *
      * 语义仍然等价于「本次会话」：退出 APP 进程即重置，
-     * 且跨进程恢复由 [SessionSpeedTracker.restoreSession] 的落盘承担。
+     * 且**不做跨进程恢复** —— 退出 APP 即全新会话（2026-10-20 用户要求）。
      */
     val sessionTracker: io.github.supit.rideassist.ui.realtime.SessionSpeedTracker by lazy {
         io.github.supit.rideassist.ui.realtime.SessionSpeedTracker()
