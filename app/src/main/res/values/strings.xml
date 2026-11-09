@@ -25,6 +25,23 @@
          上方「连接状态」已明确显示状态，再加「连接失败，请靠近设备后重试」冗余且误导 -->
     <string name="cancel_auto_connect">取消自动连接</string>
     <string name="auto_connect_cancelled">已取消自动连接</string>
+
+    <!-- ⭐ 首页连接卡右上角的齿轮：连上保护板后才出现，点进设置页 -->
+    <string name="connection_settings">连接设置</string>
+
+    <!-- ⭐ 设置页第一项：连接成功后自动跳转标签页（默认主页） -->
+    <string name="setting_connect_jump_title">连接成功后自动跳转</string>
+    <string name="setting_connect_jump_desc">保护板连接成功时，自动切换到所选标签页。默认「首页」；选「不跳转」则保持当前页。</string>
+    <string name="setting_connect_jump_label">目标标签页</string>
+    <string name="connect_jump_none">不跳转</string>
+    <!-- ⚠️ 顺序必须与 SettingsActivity.setupConnectJumpTab() 里的 keys 完全一致 -->
+    <string-array name="connect_jump_tab_labels">
+        <item>@string/nav_home</item>
+        <item>@string/nav_realtime</item>
+        <item>@string/nav_data</item>
+        <item>@string/nav_overlay</item>
+        <item>@string/connect_jump_none</item>
+    </string-array>
     <string name="bluetooth_off_title">蓝牙未开启</string>
     <string name="bluetooth_off_msg">本应用需要蓝牙连接彦阳保护板，请先开启蓝牙。</string>
     <string name="perm_required">需要权限</string>
@@ -242,6 +259,13 @@
     <string name="peak_detail_ir">推测内阻差：%.2f 毫欧姆</string>
     <string name="peak_outlier_high">偏高</string>
     <string name="peak_outlier_low">偏低</string>
+
+    <!-- ⭐ 聚焦压差卡时，下方「最近 10 次行程的最大压差单体」历史：一行一条，最新在最上。
+         **一次行程只记一条**（取该行程压差峰值那一帧），且压差没超过 50mV 的行程不记。
+         例：11-09 单体14 @ 3.946V 偏离 82.1mV
+         %1$s=MM-dd %2$02d=单体号 %3$.3f=该单体电压(V) %4$.1f=偏离量(mV，绝对值)
+         ⚠️ 序号用 02d 补零，日期/电压位数固定，配合等宽字体列才对得齐。 -->
+    <string name="diff_history_row">%1$s 单体%2$02d @ %3$.3fV 偏离 %4$.1fmV</string>
 
     <!-- ==================== 底部「数据」页（本次骑行统计） ==================== -->
     <string name="ride_page_title">骑行数据</string>

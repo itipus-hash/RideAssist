@@ -35,3 +35,6 @@ gradle/config.properties
 
 # ===== Kotlin 编译会话临时文件 =====
 .kotlin/
+
+# WorkBuddy 内部会话记忆目录（不入仓库）
+.workbuddy-ai/

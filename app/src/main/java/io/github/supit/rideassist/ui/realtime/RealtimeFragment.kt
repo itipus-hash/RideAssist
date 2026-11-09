@@ -20,6 +20,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -635,8 +636,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         b.tvRealtimeClock.visibility = overlayHidden
         // ⭐ 聚焦时归零聚焦卡的 marginTop，间距统一由时间卡 marginBottom 承担
         applyFocusCardMargin(focus)
-        // ⭐「XX 记录卡」只在聚焦时可见 → 切换聚焦目标时要跟着刷新
-        renderPeakRecordCard()
+        // ⭐「XX 记录卡」+ 压差历史卡只在聚焦时可见 → 切换聚焦目标时要跟着刷新
+        renderPeakSection()
         // ⭐ 需求4：GPS 丢失提示卡只在「聚焦速度卡」时可见。
         // 非聚焦或聚焦其他卡时强制 GONE —— 普通布局下多一张卡会让速度卡高度跳动。
         b.cardGpsLost.visibility =
@@ -708,6 +709,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         //   否则速度卡聚焦时是 0dp、其他三张卡聚焦时仍是 6dp → 间距不一致
         //   （用户反馈："压差/电流/功率聚焦时记录卡位置不对"）。
         setTopMargin(b.cardPeakRecord, if (focus == null) 0 else gap)
+        // 压差历史卡跟在记录卡下面，同样按聚焦态统一间距
+        setTopMargin(b.cardDiffHistory, if (focus == null) 0 else gap)
     }
 
     /** 设置 topMargin（已是目标像素值时跳过，避免重复触发 layout） */
@@ -1236,6 +1239,93 @@ class RealtimeFragment : Fragment(), LocationListener {
         CLOCK_FORMAT.format(java.util.Date())
 
     /**
+     * 峰值记录卡 + 压差历史卡同属「聚焦卡片下方的记录区块」，统一刷新。
+     *
+     * 两个刷新入口：切换聚焦目标（[applyCardVisibility]）与每帧 BMS 数据
+     * （[observeBatteryData]）。后者必要 —— 峰值由**应用级采集器**写入，
+     * 实时页没有 StateFlow 订阅它，只能靠每帧重绘跟进。
+     * 退到导航时 Fragment 停止刷新，但采集器仍在记；切回来时
+     * `onViewCreated` 会再调一次 [applyCardVisibility] 补齐。
+     */
+    private fun renderPeakSection() {
+        renderPeakRecordCard()
+        renderDiffHistoryCard()
+    }
+
+    /**
+     * 渲染「最近 10 次行程的最大压差单体」历史卡。
+     *
+     * 只在**聚焦压差卡且有记录**时可见 —— 与峰值记录卡同生同灭，
+     * 普通布局 / 聚焦其他卡时强制 GONE，避免多一张卡造成高度跳动。
+     * 列表最新在最上，顺序由 [SessionSpeedTracker.diffHistory] 保证；
+     * **一条 = 一次行程**（压差没超过 50mV 的行程不记），
+     * 同行程内压差再创新高只会替换那一条，不会追加。
+     *
+     * ⚠️ 行是复用的：数据每秒刷新，但历史只在压差创本行程新高 / 换新行程时才变化，
+     * 每帧重建 10 个 TextView 会白白触发 measure/layout。
+     * Fragment 重建时容器是全新的（childCount=0），自然重新创建，
+     * 所以**不要**把 View 缓存到 Fragment 字段里（会持有已销毁的布局）。
+     */
+    private fun renderDiffHistoryCard() {
+        val b = _binding ?: return
+        val rows = tracker.diffHistory
+        val visible = focusedCardIndex == CARD_DIFF && rows.isNotEmpty()
+        b.cardDiffHistory.visibility = if (visible) View.VISIBLE else View.GONE
+        if (!visible) return
+
+        val container = b.llDiffHistory
+        val rowGapPx = (4 * resources.displayMetrics.density).toInt()
+        while (container.childCount < rows.size) {
+            container.addView(TextView(container.context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                )
+                textSize = 14f
+                typeface = android.graphics.Typeface.MONOSPACE
+                includeFontPadding = false
+            })
+        }
+        for (i in 0 until container.childCount) {
+            val tv = container.getChildAt(i) as TextView
+            if (i >= rows.size) {
+                if (tv.visibility != View.GONE) tv.visibility = View.GONE
+                continue
+            }
+            if (tv.visibility != View.VISIBLE) tv.visibility = View.VISIBLE
+
+            val e = rows[i]
+            val line = getString(
+                R.string.diff_history_row, e.date, e.cellIndex, e.cellVolt, e.deviationMv
+            )
+            if (tv.text.toString() != line) tv.text = line
+
+            // 第一行（最新）用主色加粗，其余中性灰 —— 不加标题行也能看出方向。
+            val newest = i == 0
+            if (tv.tag != newest) {
+                tv.tag = newest
+                tv.setTextColor(
+                    ContextCompat.getColor(
+                        container.context,
+                        if (newest) R.color.primary else R.color.text_secondary,
+                    )
+                )
+                tv.setTypeface(
+                    android.graphics.Typeface.MONOSPACE,
+                    if (newest) android.graphics.Typeface.BOLD
+                    else android.graphics.Typeface.NORMAL,
+                )
+            }
+            val lp = tv.layoutParams as LinearLayout.LayoutParams
+            val wantGap = if (newest) 0 else rowGapPx
+            if (lp.topMargin != wantGap) {
+                lp.topMargin = wantGap
+                tv.layoutParams = lp
+            }
+        }
+    }
+
+    /**
      * 渲染「XX 最大值记录」卡。
      *
      * 只在**聚焦某张卡**且该卡已有记录时可见（需求）；
@@ -1523,8 +1613,8 @@ class RealtimeFragment : Fragment(), LocationListener {
                     //    与功率/电流/压差三项同层级：用 tracker.liveSpeedKmh 做速度证据
                     //    （前台本页写、退后台悬浮前台服务写）。以前只在这里比对，
                     //    切到导航后 Fragment STOPPED → 「最大速度 @ 时间」记录卡冻结。
-                    // 峰值被应用级采集器刷新时，本页也要跟着重绘记录卡
-                    renderPeakRecordCard()
+                    // 峰值被应用级采集器刷新时，本页也要跟着重绘记录卡 + 压差历史
+                    renderPeakSection()
 
                     // ⭐ 骑行统计：状态机由 YybmsApp 统一驱动，本页只做积分
                     val verdict = judgeMoving(d)

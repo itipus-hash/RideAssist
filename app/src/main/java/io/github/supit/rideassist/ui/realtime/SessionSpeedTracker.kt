@@ -162,6 +162,108 @@ class SessionSpeedTracker : ViewModel() {
         val outlierDeviation: Float = 0f,
     )
 
+    /**
+     * 一次**行程**里最大压差那一刻，偏离整体均值最多的那颗单体的快照。
+     *
+     * ⭐ 口径（用户 2026-11-09 修正）：**单次行程只记录一次**，
+     * 且该行程压差峰值必须超过 [MIN_DIFF_HISTORY_MV] 才记。
+     * 同一行程里压差再创新高，是**替换**这一条（换成更大压差那帧的快照），
+     * 不是追加 —— 列表里一条 = 一次行程。
+     *
+     * @param tripId      所属行程序号（内部判定用，不显示）
+     * @param diffMv      该行程当时的峰值压差（mV，内部判定用，不显示）
+     * @param date        MM-dd（如 11-09）
+     * @param cellIndex   单体序号，1-based（与峰值记录卡同口径）
+     * @param cellVolt    该单体当时的电压（V，3 位小数显示）
+     * @param deviationMv 相对其余电芯均值的偏离量绝对值（mV，1 位小数显示）
+     */
+    data class DiffHistoryEntry(
+        val tripId: Long,
+        val diffMv: Float,
+        val date: String,
+        val cellIndex: Int,
+        val cellVolt: Float,
+        val deviationMv: Float,
+    )
+
+    /**
+     * ⭐ 最近 [MAX_DIFF_HISTORY] **次行程**的最大压差单体，**最新在最前**。
+     *
+     * ⚠️ 写入方是应用级采集协程，读取方是实时页主线程，
+     * 所以用「不可变 List 整体替换」而不是原地修改 MutableList ——
+     * 避免遍历渲染时被并发修改。
+     *
+     * ⚠️ 生命周期与 [peakRecords] 完全一致：**只在进程内存里**。
+     * 用户明确要求「退出 APP = 全新会话」，会话落盘已停用（见
+     * RealtimeFragment.onViewCreated），所以这里不做持久化；
+     * [resetSession] 会连同峰值一起清空。
+     */
+    @Volatile
+    var diffHistory: List<DiffHistoryEntry> = emptyList()
+        private set
+
+    /**
+     * ⭐ 当前行程序号：记录状态机每完成一次「未记录 → 记录中」迁移就 +1。
+     * 停车等红灯不会结束行程（[isRecording] 是锁存的），所以一次骑行只占一条。
+     */
+    @Volatile
+    private var tripSeq: Long = 0L
+
+    /** 同行程替换、新行程追加；列表始终最多 [MAX_DIFF_HISTORY] 条 */
+    private fun appendDiffHistory(entry: DiffHistoryEntry) {
+        val previous = diffHistory
+        diffHistory = if (previous.firstOrNull()?.tripId == entry.tripId) {
+            listOf(entry) + previous.drop(1)
+        } else {
+            listOf(entry) + previous.take(MAX_DIFF_HISTORY - 1)
+        }
+    }
+
+    /**
+     * ⭐⭐ **压差历史的唯一写入口**（用户 2026-11-09 修正的口径）。
+     *
+     * 三条硬规则：
+     * 1. **单次行程只记录一次** —— 同一行程里压差再创新高，是**替换**这一条，
+     *    内容换成「该行程压差最大那一帧」的快照；
+     * 2. **压差没超过 [MIN_DIFF_HISTORY_MV]（50mV）不记录** ——
+     *    `cellDiff` 单位就是 mV（见 YybmsPayloadParser：`(max-min)*1000f`）；
+     * 3. **行程以记录状态机为准** —— 一次 `isRecording: false→true` 是一次新行程，
+     *    停车等红灯不会结束行程（锁存），所以一次骑行不会冒出好几条。
+     *
+     * ⚠️⚠️ **必须独立于会话峰值门控**：[updatePeak] 只在「破了整段会话最大值」
+     * 时才继续往下走。若把历史塞在那个分支里，第 2 次行程压差没破第 1 次的
+     * 会话纪录就一条都不记 —— 这恰恰与「一次行程一条」矛盾。
+     * 所以本方法在 [updatePeak] 的最前面调用，用**本行程**的峰值做比较，
+     * 与 [peakRecords] 的会话峰值互不干扰。
+     */
+    private fun updateDiffHistory(
+        valueMv: Float,
+        d: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData,
+        now: java.util.Date,
+    ) {
+        val trip = tripSeq
+        if (!isRecording || trip <= 0L) return          // 不在行程里 → 不记
+        if (valueMv <= MIN_DIFF_HISTORY_MV) return      // 没超过 50mV → 不记
+        val v = d.cellVoltages
+        if (d.cellCount < 2 || v.size < 2) return       // 无「压差」可言
+
+        // 同行程只在**本行程**压差创新高时替换；否则保留峰值那帧的快照
+        val current = diffHistory.firstOrNull { it.tripId == trip }
+        if (current != null && valueMv <= current.diffMv) return
+
+        val outlier = findOutlierCell(v)
+        appendDiffHistory(
+            DiffHistoryEntry(
+                tripId = trip,
+                diffMv = valueMv,
+                date = DATE_FORMAT.format(now),
+                cellIndex = outlier.first + 1,
+                cellVolt = if (outlier.first >= 0) v[outlier.first] else 0f,
+                deviationMv = kotlin.math.abs(outlier.second) * 1000f,
+            )
+        )
+    }
+
     /** 四项峰值记录，下标与 [CARD_COUNT] 对齐；null = 尚无记录 */
     val peakRecords = arrayOfNulls<PeakRecord>(CARD_COUNT)
 
@@ -641,11 +743,16 @@ class SessionSpeedTracker : ViewModel() {
      *
      * @param dischargingNow 当前是否放电 >= 阈值
      * @param hasDeviceData 本帧是否有真实设备数据（断连时为 false）
+     * @param nowMs 墙钟时刻；默认取系统时间，纯 JVM 单测可注入以模拟「断连超时」
      * @return true = 状态发生了迁移（调用方需要重绘 UI）
      */
-    fun updateRecordingState(dischargingNow: Boolean, hasDeviceData: Boolean): Boolean {
+    fun updateRecordingState(
+        dischargingNow: Boolean,
+        hasDeviceData: Boolean,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Boolean {
         val before = isRecording
-        if (hasDeviceData) lastDataWallMs = System.currentTimeMillis()
+        if (hasDeviceData) lastDataWallMs = nowMs
 
         if (dischargingNow) {
             // 启动条件：放电 >= 阈值。**一旦启动就不再因电流回落而停止。**
@@ -656,9 +763,14 @@ class SessionSpeedTracker : ViewModel() {
             // 后者在滑行/等红灯时会误停。
             val last = lastDataWallMs
             val disconnectedTooLong = last == 0L ||
-                System.currentTimeMillis() - last >= STOP_AFTER_DISCONNECT_MS
+                nowMs - last >= STOP_AFTER_DISCONNECT_MS
             if (disconnectedTooLong) isRecording = false
         }
+
+        // ⭐ 一次「未记录 → 记录中」= 一次新行程。
+        //    tripSeq 是压差历史「一条 = 一次行程」的唯一编号来源；
+        //    停车等红灯时 isRecording 保持 true，不会重复开行程。
+        if (!before && isRecording) tripSeq++
         return isRecording != before
     }
 
@@ -736,10 +848,18 @@ class SessionSpeedTracker : ViewModel() {
      * @return true = 刷新了记录（调用方需要重绘）
      */
     fun updatePeak(index: Int, value: Float, d: io.github.supit.rideassist.core.protocol.model.BmsRealtimeData): Boolean {
+        // ⭐ 同一帧只取一次时间：HH:mm 给峰值卡、MM-dd 给压差历史，
+        //    跨零点时两处才不会对不上。
+        val now = java.util.Date()
+
+        // ⭐⭐ 压差历史按**行程**统计，必须放在会话峰值门控之前
+        //    （详见 [updateDiffHistory] 的说明：门控之后会漏掉整个行程）。
+        if (index == CARD_DIFF) updateDiffHistory(value, d, now)
+
         val cur = peakRecords[index]
         if (cur != null && value <= cur.value) return false    // 没超过历史最大
 
-        val clock = CLOCK_FORMAT.format(java.util.Date())
+        val clock = CLOCK_FORMAT.format(now)
         peakRecords[index] = if (index == CARD_DIFF) {
             // 压差：额外记录电流 + 最高/最低单体（含序号）
             val v = d.cellVoltages
@@ -753,7 +873,7 @@ class SessionSpeedTracker : ViewModel() {
             }
             // ⭐ 找出**偏离其余电芯均值最多**的那一颗（用户需求）
             val outlier = findOutlierCell(v)
-            PeakRecord(
+            val rec = PeakRecord(
                 value = value,
                 clock = clock,
                 current = d.totalCurrent,
@@ -764,6 +884,9 @@ class SessionSpeedTracker : ViewModel() {
                 outlierCellIndex = outlier.first + 1,        // 1-based
                 outlierDeviation = outlier.second,
             )
+            // ⚠️ 压差历史**不在这里**写：它按行程统计，与会话峰值不同口径，
+            //    已在方法开头由 [updateDiffHistory] 独立处理。
+            rec
         } else {
             PeakRecord(value = value, clock = clock)
         }
@@ -1011,6 +1134,8 @@ class SessionSpeedTracker : ViewModel() {
         currentPoints.clear()
         lastDischargeWallMs = 0L
         diffPoints.clear()
+        diffHistory = emptyList()
+        tripSeq = 0L             // ⭐ 会话清空 = 行程计数重新从 1 开始
         java.util.Arrays.fill(peakRecords, null)
         _peakRevision.update { it + 1 }
         // ⭐ maxSpeed 也归零了，必须通知订阅方（悬浮窗的「极速」），
@@ -1082,6 +1207,18 @@ class SessionSpeedTracker : ViewModel() {
         private const val KEY_RATED = "rated_ah"
         private const val KEY_PEAKS = "peaks"
 
+        /** 压差历史保留条数（用户指定 10 条 = 最近 10 次行程，最新在最上） */
+        const val MAX_DIFF_HISTORY = 10
+
+        /**
+         * ⭐ **压差历史的最小压差（mV）**：**没超过 50mV 不记录**（用户 2026-11-09）。
+         *
+         * `cellDiff` 单位本就是 mV（YybmsPayloadParser：`(max-min)*1000f`），
+         * 用严格大于判断：恰好 50mV 也不记。
+         * 阈值只作用于**历史卡**，峰值记录卡仍照常显示小压差，不改变旧行为。
+         */
+        const val MIN_DIFF_HISTORY_MV = 50f
+
         /**
          * Max/Min 的保留时长：**3 分钟**（用户指定）。
          *
@@ -1117,5 +1254,9 @@ class SessionSpeedTracker : ViewModel() {
         /** 峰值记录的时刻格式化（HH:mm） */
         private val CLOCK_FORMAT =
             java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+
+        /** 压差历史的日期格式化（MM-dd，如 11-09） */
+        private val DATE_FORMAT =
+            java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault())
     }
 }

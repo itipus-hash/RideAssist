@@ -10,6 +10,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.github.supit.rideassist.R
 import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.databinding.ActivityMainBinding
+import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.ui.cells.CellDetailFragment
 import io.github.supit.rideassist.ui.realtime.RealtimeFragment
 import io.github.supit.rideassist.ui.monitor.MonitorFragment
@@ -151,6 +152,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+    /**
+     * ⭐ **连接保护板成功后按设置自动切换标签页**（用户 2026-11-09）。
+     *
+     * @param tab [AppPrefs.connectJumpTab] 的值；[AppPrefs.TAB_NONE] 或未知值 = 不跳转。
+     *
+     * - 默认 `TAB_HOME`：冷启动时本来就在首页 → [currentTag] 已相同，直接返回，
+     *   不产生无谓的 Fragment 事务，也不会把用户从详情页硬拽回来。
+     * - 目标页与当前页不同才跳；顺手恢复底部导航（详情页会隐藏它）。
+     */
+    fun autoJumpOnConnected(tab: String) {
+        val (itemId, tag) = when (tab) {
+            AppPrefs.TAB_HOME -> R.id.nav_home to TAG_MONITOR
+            AppPrefs.TAB_REALTIME -> R.id.nav_realtime to TAG_REALTIME
+            AppPrefs.TAB_DATA -> R.id.nav_data to TAG_RIDE_DATA
+            AppPrefs.TAB_OVERLAY -> R.id.nav_overlay to TAG_OVERLAY
+            else -> return      // TAB_NONE / 历史遗留的未知值：保持当前页
+        }
+        if (currentTag == tag) return
+
+        binding.bottomNav.visibility = View.VISIBLE
+        // setSelectedItemId 变化时会触发 OnItemSelectedListener → showFragment(tag)
+        binding.bottomNav.selectedItemId = itemId
+        // 幂等兜底：若 selectedItemId 本来就相同（如刚从详情页出来），监听器不会回调
+        showFragment(tag)
+    }
 
     /** 供 Fragment 调用：进入单体压差详情 */
     fun openCellDetail() {

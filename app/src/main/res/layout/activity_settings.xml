@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  设置页（2026-10-20 重构）：
-  连接设置与 BMS 报警开关已移入诊断面板（用户要求），本页只留胎压相关配置。
+  设置页（2026-10-20 重构 / 2026-11-09 新增）：
+  连接设置与 BMS 报警开关已移入诊断面板（用户要求）；
+  2026-11-09 起首页连接卡新增齿轮入口，本页顶部放第一项设置
+  「连接成功后自动跳转标签页」，下方仍是胎压相关配置。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -27,10 +29,65 @@
             android:orientation="vertical"
             android:padding="12dp">
 
+            <!-- ⭐ 连接成功后自动跳转标签页（2026-11-09，本页第一项设置）。
+                 从首页连接卡的齿轮进来；默认「首页」，下拉可改其它标签页或「不跳转」。 -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/CardTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/setting_connect_jump_title" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/setting_connect_jump_desc"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_connect_jump_label"
+                            android:textSize="14sp" />
+
+                        <Spinner
+                            android:id="@+id/spinner_connect_jump_tab"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:entries="@array/connect_jump_tab_labels"
+                            android:minWidth="120dp"
+                            android:spinnerMode="dropdown" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- 胎压告警阈值：点击行弹出输入框修改，存 SharedPreferences -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp">

@@ -553,5 +553,30 @@
                     tools:text="偏离最多：单体 08（偏低85.0mV）" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 最近 10 次「最大压差」的单体历史 ============
+             ⭐ 只在**聚焦压差卡**时显示，跟在峰值记录卡下面；无记录时整卡 GONE。
+             一行一条、最新在最上，格式见 @string/diff_history_row：
+                 11-09 单体14 @ 3.946V 偏离 82.1mV
+             ⚠️ 行是代码动态复用创建的 TextView（历史最多 10 条，写死 10 个
+                TextView 会让布局膨胀），容器只负责纵向排列 + 统一内边距。
+             ⚠️ 不加标题行：聚焦模式常在分屏下用，多一行就多一次滚动。 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_diff_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:id="@+id/ll_diff_history"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp" />
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

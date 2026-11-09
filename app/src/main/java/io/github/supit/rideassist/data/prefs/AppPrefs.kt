@@ -190,6 +190,18 @@ class AppPrefs(context: Context) {
         get() = sp.getBoolean("overlay_jump_on_nav", true)
         set(value) = sp.edit { putBoolean("overlay_jump_on_nav", value) }
 
+    // ==================== 连接成功后的自动跳转 ====================
+
+    /**
+     * ⭐ **连接保护板成功后自动切到哪个标签页**（用户 2026-11-09）。
+     *
+     * 默认 [TAB_HOME]（主页）。可选其它三个底部标签页，或 [TAB_NONE]（不跳转）。
+     * 只在「未连接 → 已连接」的上升沿生效一次，回前台 / 页面重建不会重复跳。
+     */
+    var connectJumpTab: String
+        get() = sp.getString(KEY_CONNECT_JUMP_TAB, TAB_HOME) ?: TAB_HOME
+        set(value) = sp.edit { putString(KEY_CONNECT_JUMP_TAB, value) }
+
     /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
     var overlayShowSpace: Boolean
         get() = sp.getBoolean("overlay_show_space", false)
@@ -379,6 +391,15 @@ class AppPrefs(context: Context) {
     }
 
     companion object {
+        // 连接成功后自动跳转的目标标签页（与底部导航四个 id 一一对应）
+        const val TAB_HOME = "home"
+        const val TAB_REALTIME = "realtime"
+        const val TAB_DATA = "data"
+        const val TAB_OVERLAY = "overlay"
+        /** 「不跳转」：保持用户当前所在页 */
+        const val TAB_NONE = "none"
+
+        private const val KEY_CONNECT_JUMP_TAB = "connect_jump_tab"
         private const val KEY_LAST_MAC = "last_device_mac"
         private const val KEY_LAST_NAME = "last_device_name"
         private const val KEY_AUTO_CONNECT = "auto_connect_enabled"

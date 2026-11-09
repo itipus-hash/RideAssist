@@ -27,6 +27,7 @@ import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.databinding.FragmentMonitorBinding
 import io.github.supit.rideassist.ui.diag.DiagActivity
 import io.github.supit.rideassist.ui.main.MainActivity
+import io.github.supit.rideassist.ui.settings.SettingsActivity
 import io.github.supit.rideassist.util.RelativeTime
 import io.github.supit.rideassist.util.VibrateHelper
 import kotlinx.coroutines.flow.first
@@ -66,8 +67,18 @@ class MonitorFragment : Fragment() {
     /** 刚结束扫描（用于决定是否显示空态提示） */
     private var scanningJustFinished = false
 
-    /** 上一次连接状态是否为「已连接」—— 用来识别「刚断开」这一次迁移 */
+    /**
+     * 上一次连接状态是否为「已连接」—— 用来识别「刚断开 / 刚连上」这一次迁移。
+     *
+     * ⚠️ 在 [onViewCreated] 里按当前真实状态初始化，否则 Activity 重建或回前台时
+     *    StateFlow 首帧重放 CONNECTED 会被误判成「刚连接成功」而重复跳页。
+     */
     private var wasConnected = false
+
+    /** ⭐ 应用级偏好：连接成功后自动跳转的目标标签页（设置页写入） */
+    private val appPrefs by lazy {
+        io.github.supit.rideassist.YybmsAppHolder.from(requireContext()).prefs
+    }
 
     /** 断开提示的节流（重连循环时不要连续弹） */
     private var lastDisconnectedToastMs = 0L
@@ -146,6 +157,9 @@ class MonitorFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupScanList()
         setupClickListeners()
+        // ⭐ 订阅前先把「已连接」状态对齐：页面重建 / 回前台时首帧只是重放，
+        //    不是一次新的连接成功，不能触发自动跳转。
+        wasConnected = viewModel.connectionState.value == ConnectionState.CONNECTED
         observeState()
         onPermissionChainStart()
         startClock()
@@ -1031,6 +1045,12 @@ class MonitorFragment : Fragment() {
         // 扫描按钮 → 弹出设备列表对话框
         binding.btnScan.setOnClickListener { requestScanAndShowDialog() }
 
+        // ⭐ 连接卡右上角齿轮 → 设置页（连接成功后自动跳转等设置）。
+        //    按钮只在 CONNECTED 时由 renderConnectionState 显示。
+        binding.btnConnectionSettings.setOnClickListener {
+            startActivity(Intent(requireContext(), SettingsActivity::class.java))
+        }
+
         // ⭐ 长按「已连接」卡片 → 弹出蓝牙扫描，方便换连别的保护板
         //（需求："首页连接成功后，允许长按已连接这个格子，然后弹出蓝牙扫描"）
         binding.cardConnection.setOnLongClickListener {
@@ -1157,6 +1177,10 @@ class MonitorFragment : Fragment() {
     }
 
     private fun renderConnectionState(state: ConnectionState) {
+        // ⭐ 「连接成功」上升沿：只在 未连接→已连接 的这一次为 true。
+        //    wasConnected 已在订阅前按真实状态初始化，页面重建/回前台不会重复触发。
+        val justConnected = !wasConnected && state == ConnectionState.CONNECTED
+
         // ⭐ 从「已连接」掉到「已断开」时主动提示一次（用户要求
         //   「断开保护板悬浮提示一下：保护板连接已断开」）。
         //   加 3 秒节流：连接不稳定时会在 CONNECTED / DISCONNECTED 间反复跳，
@@ -1171,6 +1195,17 @@ class MonitorFragment : Fragment() {
             }
         }
         wasConnected = state == ConnectionState.CONNECTED
+
+        // ⭐ 齿轮入口只在「连接成功保护板后」出现（用户 2026-11-09）；
+        //    未连接时这一行要留给「扫描」按钮，不抢位置。
+        binding.btnConnectionSettings.visibility =
+            if (state == ConnectionState.CONNECTED) View.VISIBLE else View.GONE
+
+        // ⭐ 连接成功时按设置自动切换标签页。默认「首页」且已在首页时，
+        //    MainActivity.autoJumpOnConnected 会直接返回，界面不会有任何跳动。
+        if (justConnected) {
+            (activity as? MainActivity)?.autoJumpOnConnected(appPrefs.connectJumpTab)
+        }
 
         binding.tvConnectionState.text = state.displayText
         binding.tvConnectionState.setTextColor(
