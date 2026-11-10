@@ -26,10 +26,12 @@ import android.widget.Toast
  * 所以 APP 里**所有**轻提示（原来是 5 处 Snackbar + 15 处 Toast）都走这里，
  * 统一成同一种外观与位置：
  *
- * - **居中**：屏幕正中央（原来 Snackbar 贴底、Toast 偏下，现在一致）；
- * - **背景**：深灰 `#1F1F1F` + **一点透明度**（α ≈ 90%）+ 14dp 圆角，
+ * - **水平居中、垂直靠底**：左右居中，浮在屏幕底部往上一点（离底 88dp）——
+ *   ⚠️ **不是垂直居中**（用户 2026-11-10 纠正：「水平居中，不是让你垂直居中」）：
+ *   垂直居中会把提示怼在屏幕正中，正好挡住正在看的内容。
+ * - **背景**：深灰 `#1F1F1F` + **80% 不透明度** + 14dp 圆角，
  *   底下页面能隐约透出来，比实心黑条轻；
- * - **淡入淡出**：进 180ms 淡入，停一会儿，出 200ms 淡出后销毁。
+ * - **淡入淡出**：进 300ms 淡入，停一会儿，出 350ms 淡出后销毁（用户嫌快，放慢了）。
  *
  * ## 为什么不用 Snackbar
  * Snackbar 只能贴在 CoordinatorLayout 底部，想居中只能靠 `translationY` 硬凑
@@ -47,21 +49,25 @@ import android.widget.Toast
  */
 object Feedback {
 
-    /** 底色：深灰 0x1F1F1F，α ≈ 90%（留一点透明） */
+    /** 底色：深灰 0x1F1F1F */
     private const val BG_COLOR = 0xFF1F1F1F.toInt()
 
-    /** 背景不透明度：0xE6 = 230/255 ≈ 90% */
-    private const val BG_ALPHA = 0xE6
+    /** 背景不透明度：0xCC = 204/255 = **80%**（用户 2026-11-10：「80% 透明度试试」） */
+    private const val BG_ALPHA = 0xCC
 
     private const val CORNER_DP = 14
     private const val PAD_H_DP = 22
     private const val PAD_V_DP = 14
     private const val TEXT_SP = 15f
 
-    private const val FADE_IN_MS = 180L
-    private const val FADE_OUT_MS = 200L
+    /** ⭐ 淡入淡出放慢（用户 2026-11-10：「速度放慢点」） */
+    private const val FADE_IN_MS = 300L
+    private const val FADE_OUT_MS = 350L
     private const val HOLD_SHORT_MS = 2000L
     private const val HOLD_LONG_MS = 3500L
+
+    /** 距屏幕底部的距离：提示不贴底，浮在底部往上一点 */
+    private const val BOTTOM_OFFSET_DP = 88
 
     /** 当前正在显示的浮层：新的提示来了先把旧的收掉，避免叠成一摞 */
     private var currentDialog: Dialog? = null
@@ -126,7 +132,10 @@ object Feedback {
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
             )
-            setGravity(Gravity.CENTER)
+            // ⭐ **水平居中 + 垂直靠底**（用户 2026-11-10 纠正：
+            //    「水平居中，不是让你垂直居中」）。
+            //    垂直居中会把提示怼在屏幕正中，挡住正在看的内容，很丑。
+            setGravity(Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM)
             addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
             addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
             // 不要系统默认的窗口动画，淡入淡出我们自己演
@@ -144,6 +153,15 @@ object Feedback {
             return
         }
         currentDialog = dialog
+
+        // ⚠️ show() 之后 window 才 attach，此时改 gravity / y 偏移才真正生效
+        dialog.window?.let { w ->
+            val lp = w.attributes
+            lp.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            // y 为负 = 离底边往上抬
+            lp.y = -activity.dp(BOTTOM_OFFSET_DP)
+            w.attributes = lp
+        }
 
         // ⭐ 淡入
         tv.animate().alpha(1f).setDuration(FADE_IN_MS).start()
