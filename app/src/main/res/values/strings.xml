@@ -315,7 +315,7 @@
          %1$s=MM-dd %2$02d=单体号 %3$.3f=该单体电压(V) %4$d=当时电流(A) %5$.1f=偏离量(mV)
          ⚠️ 2026-11-10 用户要求：去掉「单体」二字、加上当时的电流。
          ⚠️ 序号用 02d 补零，日期/电压位数固定，配合等宽字体列才对得齐。 -->
-    <string name="diff_history_title">最大压差单体记录</string>
+    <string name="diff_history_title">压差记录</string>
     <!-- ⚠️ 空态阈值来自设置页，不能写死 50（%1$s = 当前生效阈值，如 50 / 55.5） -->
     <string name="diff_history_empty">暂无压差＞%1$s mV记录</string>
     <string name="diff_history_row">%1$s %2$02d @ %3$.3fV @ %4$dA 偏离%5$.1fmV</string>
@@ -326,9 +326,9 @@
          例：11-10 极速 55Km/h @ 11:34
          %1$s=MM-dd %2$d=整数速度(Km/h) %3$s=HH:mm
          ⚠️ 序号用 %2$d（不补零），与用户给的示例「55Km/h」一致。 -->
-    <string name="top_speed_history_title">极速记录</string>
-    <string name="top_speed_history_empty">暂无极速＞%1$s Km/h记录</string>
-    <string name="top_speed_history_row">%1$s 极速 %2$dKm/h @ %3$s</string>
+    <string name="top_speed_history_title">速度记录</string>
+    <string name="top_speed_history_empty">暂无速度＞%1$s Km/h记录</string>
+    <string name="top_speed_history_row">%1$s 速度 %2$dKm/h @ %3$s</string>
 
     <!-- ⭐ 「最近 10 次行程的最大电流」历史卡（2026-11-10，只在**聚焦电流卡**时出现）：
          与极速卡完全同款，例：11-10 电流 80A @ 11:34 -->
@@ -347,6 +347,15 @@
     <string name="history_clear_message">确定清除「%1$s」的全部记录吗？此操作不可恢复。</string>
     <string name="history_clear_confirm">清除</string>
     <string name="history_clear_cancel">取消</string>
+
+    <!-- ⭐ 单击记录卡弹出的轻提示（用户 2026-11-11：
+         「点击格子，像上面那样样式弹出提醒，举个例子：最近10次电流超过50A数据」）。
+         样式沿用全局 Feedback（半透明圆角 + 底部上滑淡入 + 自动退走），
+         %1$s = 当前生效阈值（连接设置页可改，如 50 / 1000）。 -->
+    <string name="diff_history_hint">最近10次压差超过%1$s mV数据</string>
+    <string name="top_speed_history_hint">最近10次速度超过%1$s Km/h数据</string>
+    <string name="current_history_hint">最近10次电流超过%1$s A数据</string>
+    <string name="power_history_hint">最近10次功率超过%1$s W数据</string>
 
     <!-- ==================== 底部「数据」页（本次骑行统计） ==================== -->
     <string name="ride_page_title">骑行数据</string>

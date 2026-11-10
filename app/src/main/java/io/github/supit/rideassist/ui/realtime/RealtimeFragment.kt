@@ -35,6 +35,7 @@ import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.core.gate.MoveGate
 import io.github.supit.rideassist.databinding.FragmentRealtimeBinding
 import io.github.supit.rideassist.ui.monitor.MonitorViewModel
+import io.github.supit.rideassist.ui.widget.Feedback
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.ArrayDeque
@@ -313,36 +314,89 @@ class RealtimeFragment : Fragment(), LocationListener {
      * 可以直接交给 GestureDetector 的 `onSingleTapConfirmed` / `onDoubleTap`，
      * 两者互不干扰，**不再需要任何延迟判定**。
      */
-    // ==================== ⭐ 记录卡长按清除（用户 2026-11-10） ====================
+    // ==================== ⭐ 记录卡：单击看口径 / 长按清除 ====================
 
     /**
-     * 四张「记录」卡长按 → 弹确认框 → 清除该卡的全部历史。
+     * 四张「记录」卡的两个手势：
      *
-     * 用户原话：「所有最大值卡片长按后提醒是否清除记录」。
+     * - **单击** → 轻提示「最近10次XX超过YY数据」（用户 2026-11-11：
+     *   「点击格子，像上面那样样式弹出提醒，举个例子：最近10次电流超过50A数据」）。
+     *   卡片标题只有「电流记录」三个字，看不出这一列是按什么口径筛出来的
+     *   （阈值在连接设置页可改），点一下直接把口径念出来。
+     *   提示样式沿用全局 [Feedback]：半透明圆角 + 从底部上滑淡入 + 自动退走。
+     *
+     * - **长按** → 弹确认框 → 清除该卡的全部历史（用户 2026-11-10：
+     *   「所有最大值卡片长按后提醒是否清除记录」）。
      *
      * 只清**被长按的那一张**（连同它的落盘文件），不影响其它三张、
      * 也不影响本次会话峰值记录卡 —— 峰值是「本次骑行」的实时结果，
      * 记录卡才是需要手动清理的历史。
      *
-     * ⚠️ 卡片必须 `clickable/focusable`（布局已设），否则长按事件收不到。
+     * ⚠️ 卡片必须 `clickable/focusable`（布局已设），否则单击/长按都收不到。
+     * ⚠️ 这四张记录卡**不在** [cardViews] 里（它们只在聚焦对应卡时才出现），
+     *    所以单击这里不会跟「单击卡片 = 聚焦」的手势打架。
+     * ⚠️ 阈值提示**点击时现取**（`hint` 是 lambda），
+     *    用户去设置页改完阈值回来再点，念的就是新阈值。
      */
-    private fun setupHistoryClearGestures() {
+    private fun setupHistoryGestures() {
         val b = _binding ?: return
-        bindHistoryClear(b.cardDiffHistory, R.string.diff_history_title) {
-            tracker.clearDiffHistory()
-        }
-        bindHistoryClear(b.cardTopSpeedHistory, R.string.top_speed_history_title) {
-            tracker.clearTopSpeedHistory()
-        }
-        bindHistoryClear(b.cardCurrentHistory, R.string.current_history_title) {
-            tracker.clearMetricHistory(SessionSpeedTracker.CARD_CURRENT)
-        }
-        bindHistoryClear(b.cardPowerHistory, R.string.power_history_title) {
-            tracker.clearMetricHistory(SessionSpeedTracker.CARD_POWER)
-        }
+        bindHistoryGestures(
+            card = b.cardDiffHistory,
+            titleRes = R.string.diff_history_title,
+            hint = {
+                getString(
+                    R.string.diff_history_hint,
+                    RecordThreshold.label(tracker.currentThresholds.diffMv),
+                )
+            },
+        ) { tracker.clearDiffHistory() }
+
+        bindHistoryGestures(
+            card = b.cardTopSpeedHistory,
+            titleRes = R.string.top_speed_history_title,
+            hint = {
+                getString(
+                    R.string.top_speed_history_hint,
+                    RecordThreshold.label(tracker.currentThresholds.topSpeedKmh),
+                )
+            },
+        ) { tracker.clearTopSpeedHistory() }
+
+        bindHistoryGestures(
+            card = b.cardCurrentHistory,
+            titleRes = R.string.current_history_title,
+            hint = {
+                getString(
+                    R.string.current_history_hint,
+                    RecordThreshold.label(tracker.currentThresholds.currentA),
+                )
+            },
+        ) { tracker.clearMetricHistory(SessionSpeedTracker.CARD_CURRENT) }
+
+        bindHistoryGestures(
+            card = b.cardPowerHistory,
+            titleRes = R.string.power_history_title,
+            hint = {
+                getString(
+                    R.string.power_history_hint,
+                    RecordThreshold.label(
+                        tracker.currentThresholds.powerW,
+                        RecordThreshold.DEFAULT_POWER,
+                    ),
+                )
+            },
+        ) { tracker.clearMetricHistory(SessionSpeedTracker.CARD_POWER) }
     }
 
-    private fun bindHistoryClear(card: View, titleRes: Int, clear: () -> Unit) {
+    private fun bindHistoryGestures(
+        card: View,
+        titleRes: Int,
+        hint: () -> CharSequence,
+        clear: () -> Unit,
+    ) {
+        // ⭐ 单击：把「这一列是按什么阈值筛出来的」念给用户听
+        card.setOnClickListener { Feedback.show(card, hint()) }
+
         card.setOnLongClickListener {
             val ctx = context ?: return@setOnLongClickListener false
             com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
@@ -881,7 +935,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         redrawFromTracker()
         observeBatteryData()
         setupCardGestures()
-        setupHistoryClearGestures()
+        setupHistoryGestures()
         startRealtimeClock()
         // ⭐⭐ **首次进入必须显式同步一次显隐状态**（用户反馈：
         //「首次进去实时界面，除了电流卡片，其他 3 个卡片都默认显示了曲线」）。
