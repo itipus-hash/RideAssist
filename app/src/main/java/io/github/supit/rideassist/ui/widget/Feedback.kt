@@ -9,6 +9,8 @@ import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -25,12 +27,17 @@ import io.github.supit.rideassist.R
  * 所以 APP 里**所有**轻提示（原来是 5 处 Snackbar + 15 处 Toast）都走这里，
  * 统一成同一种外观与位置：
  *
- * - **水平居中、垂直靠底**：左右居中，浮在屏幕底部往上一点（离底 88dp）——
+ * - **水平居中、垂直靠底**：左右居中，浮在屏幕底部往上一点 ——
  *   ⚠️ **不是垂直居中**（用户 2026-11-10 纠正：「水平居中，不是让你垂直居中」）：
  *   垂直居中会把提示怼在屏幕正中，正好挡住正在看的内容。
+ * - **位置**：浮在**底部标签页（BottomNavigationView）按钮上方**，不贴屏幕底边。
  * - **背景**：深灰 `#1F1F1F` + **80% 不透明度** + 14dp 圆角，
  *   底下页面能隐约透出来，比实心黑条轻；
- * - **淡入淡出**：进 300ms 淡入，停一会儿，出 350ms 淡出后销毁（用户嫌快，放慢了）。
+ * - **三段式动画**（用户 2026-11-10：「这个提示要从底部位移上来，
+ *   带点透明度变化，停够时间再自己退走」）：
+ *   1. 从下方 56dp **移上来** + 淡入（360ms，减速插值）
+ *   2. **停够** 2.2s / 3.8s（从动画结束开始计时）
+ *   3. 滑回下方 + 淡出（360ms，加速插值）后移除
  *
  * ## 为什么不用 Snackbar
  * Snackbar 只能贴在 CoordinatorLayout 底部，想居中只能靠 `translationY` 硬凑
@@ -42,7 +49,12 @@ import io.github.supit.rideassist.R
  * 样式改不了；旧系统（API < 30）自绘 view 的话，圆角 / 透明度能改，
  * 但淡入淡出动画又由系统接管，做不到完全统一。
  *
- * 所以这里用 **Dialog 自绘浮层**：位置、背景、动画全部自己说了算。
+ * ## 为什么不用 Dialog 浮层
+ * Dialog 是浮动窗口，会被**系统栏区域裁剪**：`Gravity.BOTTOM` + `lp.y` 偏移量
+ * 算不准，实测提示还是贴着屏幕底边（试了两版都无效）。
+ * 所以改成把 TextView **直接加到 Activity 的 `android.R.id.content`（FrameLayout）**，
+ * 位置完全由布局系统保证 —— `bottomMargin = 底部导航栏高度 + 12dp`。
+ *
  * 取不到 Activity（例如 `BroadcastReceiver`）时退回系统 Toast ——
  * 那两处都是后台更新提示，交给系统渲染更稳。
  */
@@ -59,11 +71,24 @@ object Feedback {
     private const val PAD_V_DP = 14
     private const val TEXT_SP = 15f
 
-    /** ⭐ 淡入淡出放慢（用户 2026-11-10：「速度放慢点」） */
-    private const val FADE_IN_MS = 300L
-    private const val FADE_OUT_MS = 350L
-    private const val HOLD_SHORT_MS = 2000L
-    private const val HOLD_LONG_MS = 3500L
+    /**
+     * ⭐ 三段式动画节奏（用户 2026-11-10：「这个提示要从底部位移上来，
+     * 带点透明度变化，停够时间再自己退走」）：
+     *
+     * 1. **移上来**：[RISE_MS] 内从下方 [SLIDE_UP_DP] 处滑到定位点，同时透明度 0 → 1
+     * 2. **停够**：[HOLD_SHORT_MS] / [HOLD_LONG_MS]（从动画结束开始计时）
+     * 3. **退走**：[EXIT_MS] 内滑回下方 + 透明度 1 → 0，然后移除 View
+     */
+    private const val RISE_MS = 360L
+    private const val EXIT_MS = 360L
+    private const val HOLD_SHORT_MS = 2200L
+    private const val HOLD_LONG_MS = 3800L
+
+    /**
+     * 入场时的上滑距离：提示从最终定位点**下方这么多 dp** 处冒上来，
+     * 视觉上就是「从底部位移上来」，而不是凭空淡入。
+     */
+    private const val SLIDE_UP_DP = 56
 
     /** 提示与底部标签页（BottomNavigationView）之间的间距 */
     private const val BOTTOM_NAV_GAP_DP = 12
@@ -135,7 +160,10 @@ object Feedback {
                 activity.dp(PAD_H_DP), activity.dp(PAD_V_DP),
             )
             background = roundedBackground(activity)
-            // ⚠️ 淡入从 0 开始；出淡出结束后才移除，否则会「闪一下再消失」
+            // ⚠️ 入场初始态：位于最终定位点**下方** SLIDE_UP_DP，透明度 0
+            //    → 动画把它「移上来」的同时淡入（用户 2026-11-10：
+            //    「这个提示要从底部位移上来，带点透明度变化」）
+            translationY = activity.dp(SLIDE_UP_DP).toFloat()
             alpha = 0f
         }
 
@@ -149,17 +177,32 @@ object Feedback {
         lp.bottomMargin = bottomInsetPx(activity)
         root.addView(tv, lp)
 
-        // ⭐ 淡入
-        tv.animate().alpha(1f).setDuration(FADE_IN_MS).start()
-        // ⭐ 停留 → 淡出 → 移除
-        tv.postDelayed({
-            if (tv.parent == null) return@postDelayed
-            tv.animate()
-                .alpha(0f)
-                .setDuration(FADE_OUT_MS)
-                .withEndAction { if (tv.parent != null) (tv.parent as? ViewGroup)?.removeView(tv) }
-                .start()
-        }, holdMs)
+        // ⭐ ① 从底部**移上来** + 淡入（减速插值，滑到位时更利落）
+        // ⚠️ 同一个 View 的 ViewPropertyAnimator 只能跑一个动画，
+        //    所以「停够时间」的延迟必须挂在**这次动画的 withEndAction** 上，
+        //    不能再单独 tv.animate().start() 一次（那会把上升动画顶掉）。
+        tv.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(RISE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                // ⭐ ② 停够时间 → ③ 滑回去 + 淡出 → 移除
+                //    计时从**入场动画结束**开始算，保证「停够时间」。
+                tv.postDelayed({
+                    if (tv.parent == null) return@postDelayed
+                    tv.animate()
+                        .translationY(activity.dp(SLIDE_UP_DP).toFloat())
+                        .alpha(0f)
+                        .setDuration(EXIT_MS)
+                        .setInterpolator(AccelerateInterpolator())
+                        .withEndAction {
+                            if (tv.parent != null) (tv.parent as? ViewGroup)?.removeView(tv)
+                        }
+                        .start()
+                }, holdMs)
+            }
+            .start()
     }
 
     /**
