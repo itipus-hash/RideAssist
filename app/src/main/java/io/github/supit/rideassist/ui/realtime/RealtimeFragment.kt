@@ -660,10 +660,10 @@ class RealtimeFragment : Fragment(), LocationListener {
     /**
      * ⭐ 渲染实时页的胎压（用户 2026-11-10）：
      * - **速度卡内**的胎压行（2026-11-10 从功率卡挪过来）；
-     * - **聚焦时间卡两侧**的胎压。
+     * - **聚焦时间卡两侧**的胎压（始终显示）。
      *
      * 越界标红，口径与首页一致（<低压 或 >高压）。
-     * 显隐由「实时卡片胎压显示」设置决定，见 [applyTpmsDisplayPolicy]。
+     * 卡内那一行的显隐由「实时卡片胎压显示」设置决定，见 [applyTpmsDisplayPolicy]。
      */
     private fun renderFocusTpms(state: io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.UiState) {
         val b = _binding ?: return
@@ -710,9 +710,11 @@ class RealtimeFragment : Fragment(), LocationListener {
      * ⭐ **「实时卡片胎压显示」策略**（用户 2026-11-10）：
      * 始终显示 / 始终不显示 / 胎压异常时显示。
      *
-     * 同时作用于两处，保证实时页里胎压的出现规则只有**一个**来源：
-     * 1. 速度卡内的胎压行（聚焦时隐藏 —— 聚焦态胎压在时间卡两侧已有）；
-     * 2. 聚焦时间卡两侧的胎压。
+     * ⚠️ **只作用于「速度卡内」那一行胎压**（用户 2026-11-10 明确：
+     *    「只想管卡内那一行、聚焦时始终显示」）。
+     * - 卡内胎压行：按设置决定显隐；聚焦时隐藏（胎压改由时间卡两侧显示）。
+     * - **聚焦时间卡两侧的胎压：始终显示**，不受本设置影响
+     *   （那是聚焦模式的核心信息，不是「卡片里的胎压」）。
      */
     private fun applyTpmsDisplayPolicy() {
         val b = _binding ?: return
@@ -721,10 +723,10 @@ class RealtimeFragment : Fragment(), LocationListener {
         // 卡内胎压行：聚焦时隐藏（避免与时间卡两侧重复）
         b.rowSpeedTpms.visibility =
             if (show && focusedCardIndex == null) View.VISIBLE else View.GONE
-        // 聚焦时间卡两侧（时间卡本身只在聚焦时可见）
-        val side = if (show) View.VISIBLE else View.GONE
-        b.tvClockTpmsFront.visibility = side
-        b.tvClockTpmsRear.visibility = side
+        // ⚠️ 时间卡两侧：**始终显示**，不受本设置影响
+        //    （时间卡本身只在聚焦时可见，所以这里直接 VISIBLE 即可）
+        b.tvClockTpmsFront.visibility = View.VISIBLE
+        b.tvClockTpmsRear.visibility = View.VISIBLE
     }
 
     /** 应用显隐状态到实际视图。

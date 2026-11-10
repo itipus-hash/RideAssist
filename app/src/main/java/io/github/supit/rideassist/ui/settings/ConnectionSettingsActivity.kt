@@ -221,7 +221,9 @@ class ConnectionSettingsActivity : AppCompatActivity() {
      * ⭐ **实时卡片胎压显示**（用户 2026-11-10）。
      *
      * 三选一：始终显示 / 始终不显示 / 胎压异常时显示。
-     * 作用于实时页的「速度卡内胎压行」与「聚焦时间卡两侧胎压」。
+     * ⚠️ 只作用于实时页**速度卡内那一行**胎压；
+     *    聚焦时时间卡两侧的胎压始终显示，不受本设置影响
+     *    （用户 2026-11-10 明确：「只想管卡内那一行、聚焦时始终显示」）。
      *
      * ⚠️ 顺序必须与 [TpmsDisplayMode.ALL]（= `R.array.realtime_tpms_display_labels`）
      *    完全一致：0 = always，1 = never，2 = abnormal。
