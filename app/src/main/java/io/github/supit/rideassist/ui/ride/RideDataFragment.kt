@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import io.github.supit.rideassist.R
@@ -12,6 +11,7 @@ import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.databinding.FragmentRideDataBinding
 import io.github.supit.rideassist.ui.realtime.SessionSpeedTracker
 import java.util.Locale
+import io.github.supit.rideassist.ui.widget.Feedback
 
 /**
  * 底部「数据」页：本次骑行的汇总统计。
@@ -62,11 +62,7 @@ class RideDataFragment : Fragment() {
                     // ⭐⚠️ 「最大记录」（压差 / 极速 / 电流 / 功率）**不清**
                     //    （用户 2026-11-10 明确）：只有长按对应记录卡并确认才清。
                     tracker.resetSession()
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.diag_reset_done),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Feedback.show(requireContext(), getString(R.string.diag_reset_done))
                     // 立即重绘：峰值 / 时长 / 平均值都要归零
                     lastRevision = -1L
                     render()

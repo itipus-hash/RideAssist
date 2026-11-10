@@ -8,9 +8,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
+import io.github.supit.rideassist.ui.widget.Feedback
 
 /**
  * ⭐ APK 下载完成 → 自动弹出系统安装（Manifest 静态 receiver，进程被杀也能触发）。
@@ -30,7 +30,7 @@ class UpdateApkReceiver : BroadcastReceiver() {
             else -1
         } ?: -1
         if (status != DownloadManager.STATUS_SUCCESSFUL) {
-            Toast.makeText(context, "更新下载失败，请重试", Toast.LENGTH_LONG).show()
+            Feedback.show(context, "更新下载失败，请重试", long = true)
             return
         }
         installApk(context, sp.getString(AppUpdater.PREF_APK_FILE, null) ?: return)
@@ -42,7 +42,7 @@ class UpdateApkReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= 26 &&
                 !context.packageManager.canRequestPackageInstalls()
             ) {
-                Toast.makeText(context, "请先允许「安装未知应用」权限", Toast.LENGTH_LONG).show()
+                Feedback.show(context, "请先允许「安装未知应用」权限", long = true)
                 context.startActivity(
                     Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
                         .setData(Uri.parse("package:${context.packageName}"))

@@ -16,6 +16,7 @@ import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.databinding.FragmentOverlayBinding
 import io.github.supit.rideassist.ui.overlay.OverlayItems.saveOrder
+import io.github.supit.rideassist.ui.widget.Feedback
 
 /**
  * 悬浮显示设置页 —— 顶部「启动悬浮信息」+「打开导航软件」，
@@ -181,9 +182,7 @@ class OverlayFragment : Fragment() {
     private fun toggleOverlay() {
         val ctx = requireContext()
         if (!android.provider.Settings.canDrawOverlays(ctx)) {
-            android.widget.Toast.makeText(
-                ctx, getString(R.string.overlay_perm_hint), android.widget.Toast.LENGTH_LONG
-            ).show()
+            Feedback.show(ctx, getString(R.string.overlay_perm_hint), long = true)
             startActivity(
                 android.content.Intent(
                     android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -298,10 +297,7 @@ class OverlayFragment : Fragment() {
             .setItems(labels) { _, which ->
                 // ⭐ 首次选择只设定目标，不打开（用户要求）
                 prefs.navAppPkg = apps[which].second
-                android.widget.Toast.makeText(
-                    ctx, getString(R.string.nav_app_set_done, apps[which].first),
-                    android.widget.Toast.LENGTH_SHORT,
-                ).show()
+                Feedback.show(ctx, getString(R.string.nav_app_set_done, apps[which].first))
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

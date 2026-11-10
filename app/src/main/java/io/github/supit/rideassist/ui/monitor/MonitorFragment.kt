@@ -18,7 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.snackbar.Snackbar
 import io.github.supit.rideassist.R
 import io.github.supit.rideassist.core.ble.ConnectionState
 import io.github.supit.rideassist.core.ble.tpms.TpmsMonitor
@@ -32,11 +31,11 @@ import io.github.supit.rideassist.util.RelativeTime
 import io.github.supit.rideassist.util.VibrateHelper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import io.github.supit.rideassist.ui.widget.Feedback
 
 /**
  * 实时监控页。只读展示，不含任何参数设置入口。
@@ -229,11 +228,9 @@ class MonitorFragment : Fragment() {
                         dlg.dismiss()
                         try {
                             io.github.supit.rideassist.core.update.AppUpdater.startDownload(ctx, info)
-                            android.widget.Toast.makeText(
-                                ctx, "开始下载更新…", android.widget.Toast.LENGTH_SHORT).show()
+                            Feedback.show(ctx, "开始下载更新…")
                         } catch (_: Exception) {
-                            android.widget.Toast.makeText(
-                                ctx, "下载失败，请稍后重试", android.widget.Toast.LENGTH_SHORT).show()
+                            Feedback.show(ctx, "下载失败，请稍后重试")
                         }
                     }
                     v2.findViewById<com.google.android.material.button.MaterialButton>(
@@ -263,14 +260,13 @@ class MonitorFragment : Fragment() {
                             )
                             true
                         } catch (_: Exception) { false }
-                        android.widget.Toast.makeText(
+                        Feedback.show(
                             ctx,
                             ctx.getString(
                                 if (opened) io.github.supit.rideassist.R.string.update_page_copied
                                 else io.github.supit.rideassist.R.string.update_page_open_failed
-                            ),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                            )
+                        )
                         if (opened) dlg.dismiss()
                     }
                     dlg.show()
@@ -582,7 +578,7 @@ class MonitorFragment : Fragment() {
                 }
                 launch {
                     monitor.events.collect { msg ->
-                        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_SHORT).show()
+                        Feedback.show(requireContext(), msg)
                     }
                 }
             }
@@ -600,11 +596,11 @@ class MonitorFragment : Fragment() {
             // 未绑定：直接进入绑定窗口（引导把手机靠近目标车轮，RSSI 识别）
             VibrateHelper.vibrate(requireContext(), enabled = true)
             monitor.startBinding(pos)
-            Toast.makeText(
+            Feedback.show(
                 requireContext(),
                 getString(R.string.tpms_bind_guide, posName),
-                Toast.LENGTH_LONG,
-            ).show()
+                long = true,
+            )
             return
         }
         // 已绑定：解绑 / 重新绑定 / 交换前后轮（两颗都绑时才有意义）
@@ -620,27 +616,25 @@ class MonitorFragment : Fragment() {
                 when (options[which]) {
                     getString(R.string.tpms_action_unbind) -> {
                         monitor.unbind(pos)
-                        Toast.makeText(
+                        Feedback.show(
                             requireContext(),
                             getString(R.string.tpms_unbound_done, posName),
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        )
                     }
                     getString(R.string.tpms_action_rebind) -> {
                         monitor.startBinding(pos)
-                        Toast.makeText(
+                        Feedback.show(
                             requireContext(),
                             getString(R.string.tpms_bind_guide, posName),
-                            Toast.LENGTH_LONG,
-                        ).show()
+                            long = true,
+                        )
                     }
                     getString(R.string.tpms_action_swap) -> {
                         monitor.swapPositions()
-                        Toast.makeText(
+                        Feedback.show(
                             requireContext(),
                             getString(R.string.tpms_swap_done),
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        )
                     }
                 }
             }
@@ -900,7 +894,7 @@ class MonitorFragment : Fragment() {
                 runCatching {
                     bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
                 }.onFailure {
-                    Snackbar.make(binding.root, R.string.bluetooth_off_msg, Snackbar.LENGTH_LONG).show()
+                    Feedback.show(binding.root, getString(R.string.bluetooth_off_msg), long = true)
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -1075,8 +1069,7 @@ class MonitorFragment : Fragment() {
             // ⚠️ 必须在**已连接**时才允许 —— 未连接时长按无意义
             //（用户没连接就长按，弹扫描框反而让人困惑）
             if (viewModel.connectionState.value != ConnectionState.CONNECTED) {
-                Snackbar.make(binding.root, R.string.only_when_connected,
-                    Snackbar.LENGTH_SHORT).show()
+                Feedback.show(binding.root, getString(R.string.only_when_connected))
                 return@setOnLongClickListener true
             }
             // 反馈一下（否则用户不知道长按被识别了）
@@ -1088,7 +1081,7 @@ class MonitorFragment : Fragment() {
         // 取消自动连接
         binding.btnCancelAuto.setOnClickListener {
             viewModel.cancelAutoConnect()
-            Snackbar.make(binding.root, R.string.auto_connect_cancelled, Snackbar.LENGTH_SHORT).show()
+            Feedback.show(binding.root, getString(R.string.auto_connect_cancelled))
         }
 
         // 点击单体电芯卡片 → 进入压差详情页
@@ -1096,7 +1089,7 @@ class MonitorFragment : Fragment() {
             if (viewModel.hasCellData()) {
                 (activity as? MainActivity)?.openCellDetail()
             } else {
-                Snackbar.make(binding.root, R.string.no_cell_data, Snackbar.LENGTH_SHORT).show()
+                Feedback.show(binding.root, getString(R.string.no_cell_data))
             }
         }
     }
@@ -1155,7 +1148,7 @@ class MonitorFragment : Fragment() {
                 // 提示消息
                 launch {
                     viewModel.messages.collect {
-                        Snackbar.make(binding.root, it, Snackbar.LENGTH_SHORT).show()
+                        Feedback.show(binding.root, it)
                     }
                 }
                 // 告警事件：弹窗 + 震动（历史日志已按需求移除）
@@ -1207,9 +1200,7 @@ class MonitorFragment : Fragment() {
             val now = android.os.SystemClock.elapsedRealtime()
             if (now - lastDisconnectedToastMs > 3_000L) {
                 lastDisconnectedToastMs = now
-                Toast.makeText(
-                    requireContext(), "保护板连接已断开", Toast.LENGTH_SHORT
-                ).show()
+                Feedback.show(requireContext(), "保护板连接已断开")
             }
         }
         wasConnected = state == ConnectionState.CONNECTED

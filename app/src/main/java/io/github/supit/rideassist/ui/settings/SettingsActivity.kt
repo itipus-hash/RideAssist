@@ -4,13 +4,13 @@ import android.os.Bundle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.supit.rideassist.R
 import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.databinding.ActivitySettingsBinding
 import io.github.supit.rideassist.util.RelativeTime
+import io.github.supit.rideassist.ui.widget.Feedback
 
 /**
  * ⭐ 胎压设置页（2026-10-20 重构 / 2026-11-09 再次拆分）：
@@ -116,11 +116,10 @@ class SettingsActivity : AppCompatActivity() {
             .setPositiveButton(R.string.confirm) { _, _ ->
                 val v = input.text.toString().toFloatOrNull()
                 if (v == null || v < min || v > max) {
-                    Toast.makeText(
+                    Feedback.show(
                         this,
                         getString(R.string.tpms_threshold_invalid, min, max),
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                    )
                     return@setPositiveButton
                 }
                 save(v)
