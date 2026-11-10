@@ -1,8 +1,12 @@
 package io.github.supit.rideassist.ui.settings
 
+import android.content.Context
+import android.graphics.Rect
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
@@ -43,6 +47,11 @@ import io.github.supit.rideassist.util.TpmsDisplayMode
  *    [RecordThreshold] 默认值处理：失焦、按键盘「完成」、退出页面三个时机
  *    都会把输入框回填成实际生效值，用户不会看到「空着但其实是默认值」的困惑状态。
  *
+ * ⚠️ **点输入框以外的地方会自动结束编辑**（用户 2026-11-11）：
+ *    原生 EditText 点空白处不会失焦、键盘一直挂着，所以在
+ *    [dispatchTouchEvent] 里拦 ACTION_DOWN —— 落点不在任一阈值输入框内就
+ *    清焦点 + 收键盘（清焦点同时触发 commitThreshold 回填，见该函数注释）。
+ *
  * ⚠️ 第 7 项**不依赖保护板**（胎压是独立的一路蓝牙），所以首页连接卡的齿轮
  *    从 2026-11-10 起**未连接时也显示**，否则没连上板子就进不了这个设置。
  */
@@ -73,6 +82,56 @@ class ConnectionSettingsActivity : AppCompatActivity() {
         setupCurveDefault()
         setupRecordThresholds()
         setupRealtimeTpmsDisplay()
+    }
+
+    /**
+     * ⭐ **点输入框以外的地方自动结束编辑**（用户 2026-11-11：
+     * 「点击输入阈值的时候，如果不要修改，点击其他地方，能自动退出编辑吗」）。
+     *
+     * 原生 EditText 只在**焦点转移**时才失焦：点标题文字、卡片空白、工具栏
+     * 都不会让它失焦 —— 键盘一直挂着、光标一直闪，非得按返回键才能退出。
+     *
+     * 这里在 Activity 层拦 `ACTION_DOWN`：落点不在任何一个阈值输入框内，
+     * 就清掉焦点并收起键盘。清焦点会顺带触发 [bindThresholdInput] 里的
+     * `onFocusChange` → [commitThreshold]，把「空着 / 非法值」回填成实际生效值，
+     * 与按返回键、按「完成」是同一个口径（用户什么都没改就退出，值也不会丢）。
+     *
+     * ⚠️ 判断的是「是否落在**任一**输入框内」，不是只判当前那个：
+     *    否则从压差框点到功率框时，会先收键盘再弹出来，明显闪一下。
+     * ⚠️ 用 [MotionEvent.getRawX] / [getRawY] 与 `getGlobalVisibleRect` 配对
+     *    （都是屏幕坐标）；用 `getX/getY` 会差一个状态栏偏移，点输入框边缘判错。
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) {
+            val focused = currentFocus
+            if (focused is EditText && !isTouchInsideThresholdInput(ev)) {
+                focused.clearFocus()
+                hideKeyboard(focused)
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /** 触摸点是否落在四个阈值输入框里的任意一个内 */
+    private fun isTouchInsideThresholdInput(ev: MotionEvent): Boolean {
+        val x = ev.rawX.toInt()
+        val y = ev.rawY.toInt()
+        val rect = Rect()
+        return thresholdInputs().any { it.getGlobalVisibleRect(rect) && rect.contains(x, y) }
+    }
+
+    /** 四个记录阈值输入框（顺序无关，只用于命中判定） */
+    private fun thresholdInputs(): List<EditText> = listOf(
+        binding.etDiffThreshold,
+        binding.etTopSpeedThreshold,
+        binding.etCurrentThreshold,
+        binding.etPowerThreshold,
+    )
+
+    /** 收起软键盘 */
+    private fun hideKeyboard(view: View) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
+        imm.hideSoftInputFromWindow(view.windowToken, 0)
     }
 
     /**
@@ -234,6 +293,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 commitThreshold(edit, default, save)
                 edit.clearFocus()
+                hideKeyboard(edit)
                 true
             } else {
                 false
