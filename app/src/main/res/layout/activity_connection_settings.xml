@@ -3,29 +3,27 @@
   ⭐ 独立的「连接设置」页（用户 2026-11-09 要求）：
   从首页连接状态卡的齿轮进来，只放连接相关设置，**不与胎压设置页共享**。
 
-  目前两项：「连接BMS后自动跳转」与「实时界面曲线显示」（2026-11-11 改名）。按用户要求：
-  - 每项一行搞定：左边文字，右边直接是下拉框；
-  - 不写任何说明 / 提示文案；
-  - 「连接BMS后自动跳转」选项：不跳转 / 实时·页面 / 数据·页面 / 导航·页面。
+  七项（每项一行：左边文字、右边控件，不写任何说明文案）：
+  1. 连接BMS后跳转 —— 不跳转 / 实时·页面 / 数据·页面 / 导航·页面
+  2. 实时界面曲线显示 —— 默认显示 / 默认不显示
+  3~6. 四项记录阈值（数字输入）：压差 mV / 极速 Km-h / 电流 A / 功率 W
+  7. 实时卡片胎压显示 —— 始终显示 / 始终不显示 / 胎压异常时显示
 
   ⭐ 2026-11-11 对齐口径（用户：「备选和弹出来的菜单，包括下面填的数值，都要居中」）：
   - 左侧标题一律**左对齐**；
-  - 右侧所有控件里的文字一律**居中**：下拉框选中项、下拉弹出菜单每一项、
-    数字输入框里的数值；
-  - 下拉框的居中靠代码换 item 布局实现（`bindCenteredSpinner`），
-    XML 的 `android:gravity` 对 Spinner 条目无效，所以这里**不写 entries**。
+  - 右侧控件里的文字一律**居中**，且**共用同一条中轴**：
+    下拉框选中项、下拉弹出菜单每一项、数字输入框里的数值。
+  - 所以 7 个控件**宽度必须完全一致**（都是 152dp）——宽度不同就没有共同中轴，
+    文字各自在自己框里居中，看起来仍然是歪的（实测过：132dp 时下拉框文字中心
+    比输入框数字中心偏左 73px ≈ 24dp）。
 
-  2026-11-10 新增第三、四项：两项**记录阈值**（数字输入，右侧输入框）：
-  - 最大压差记录阈值（mV），默认 50；
-  - 极速记录阈值（Km/h），默认 50。
-  同日又加第五、六项（电流 / 功率）：
-  - 电流记录阈值（A），默认 50；
-  - 功率记录阈值（W），默认 1000。
-  留空或填非法值 → 失焦 / 关闭页面时回填各自默认值（见 RecordThreshold）。
-
-  同日再加第七项（下拉框）：
-  - 实时卡片胎压显示：始终显示 / 始终不显示 / 胎压异常时显示，默认「始终显示」。
-  这一项**不依赖保护板**，所以首页连接卡的齿轮未连接时也会显示。
+  ⚠️ 为什么下拉框要包一层 FrameLayout 自己画箭头：
+     系统 Spinner 的背景 `abc_spinner_mtrl_am_alpha` 在右侧给箭头留了约 **49dp**
+     空白，文字只能在剩下的约 83dp 里居中 → 文字中心天然偏左，
+     而且「胎压异常时显示」会被挤成两行。
+     改成：Spinner 用 `background=@null` + 左右**等量** padding(20dp)，
+     文字中心就回到控件正中；箭头用一个 ▾ TextView 叠在右侧 padding 区里
+     （不可点击、不吃触摸，点击照样落到 Spinner 上）。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -43,18 +41,21 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- ⚠️ 页面 padding 8dp（原 12dp）+ 卡片 contentPadding 12dp（原 16dp）：
+             省出来的 16dp 全部给控件列，否则「最大压差记录阈值（mV）」这种长标题
+             会被挤到换行。 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:padding="8dp">
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
-                app:contentPadding="16dp"
+                app:contentPadding="12dp"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -62,7 +63,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <!-- 第一项：连接BMS后自动跳转 -->
+                    <!-- ========== 第一项：连接BMS后跳转 ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -76,20 +77,46 @@
                             android:text="@string/setting_connect_jump_title"
                             android:textSize="14sp" />
 
-                        <!-- ⚠️ 不写 android:entries：条目改由代码套「居中」适配器
-                             （见 ConnectionSettingsActivity.bindCenteredSpinner），
-                             避免 XML 与代码两处维护同一份标签。 -->
-                        <Spinner
-                            android:id="@+id/spinner_connect_jump_tab"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
-                            android:minWidth="112dp"
-                            android:dropDownWidth="190dp"
-                            android:spinnerMode="dropdown" />
+                            android:orientation="vertical">
+
+                            <FrameLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content">
+
+                            <Spinner
+                                android:id="@+id/spinner_connect_jump_tab"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@null"
+                                android:dropDownWidth="190dp"
+                                android:paddingStart="20dp"
+                                android:paddingEnd="20dp"
+                                android:spinnerMode="dropdown" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="end|center_vertical"
+                                android:layout_marginEnd="4dp"
+                                android:clickable="false"
+                                android:focusable="false"
+                                android:importantForAccessibility="no"
+                                android:text="▾"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="14sp" />
+                            </FrameLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="?attr/colorControlNormal" />
+                        </LinearLayout>
                     </LinearLayout>
 
-                    <!-- 第二项（2026-11-09）：进入实时页时曲线是否默认显示。
-                         风格与第一项完全一致：一行文字 + 右侧下拉，无任何提示。 -->
+                    <!-- ========== 第二项：实时界面曲线显示 ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -104,18 +131,46 @@
                             android:text="@string/setting_curve_default_title"
                             android:textSize="14sp" />
 
-                        <Spinner
-                            android:id="@+id/spinner_realtime_curve_default"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
-                            android:minWidth="112dp"
-                            android:dropDownWidth="190dp"
-                            android:spinnerMode="dropdown" />
+                            android:orientation="vertical">
+
+                            <FrameLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content">
+
+                            <Spinner
+                                android:id="@+id/spinner_realtime_curve_default"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@null"
+                                android:dropDownWidth="190dp"
+                                android:paddingStart="20dp"
+                                android:paddingEnd="20dp"
+                                android:spinnerMode="dropdown" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="end|center_vertical"
+                                android:layout_marginEnd="4dp"
+                                android:clickable="false"
+                                android:focusable="false"
+                                android:importantForAccessibility="no"
+                                android:text="▾"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="14sp" />
+                            </FrameLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="?attr/colorControlNormal" />
+                        </LinearLayout>
                     </LinearLayout>
 
-                    <!-- 第三项（2026-11-10）：最大压差记录阈值（mV）。
-                         与上面两项同样的「一行搞定」风格：左边文字，右边数字输入框。
-                         ⚠️ 不写任何提示文案；留空/非法值在失焦或退出页面时回填 50。 -->
+                    <!-- ========== 第三项：最大压差记录阈值（mV） ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -132,18 +187,17 @@
 
                         <EditText
                             android:id="@+id/et_diff_threshold"
-                            android:layout_width="88dp"
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
                             android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- 第四项（2026-11-10）：极速记录阈值（Km/h），风格与第三项一致 -->
+                    <!-- ========== 第四项：极速记录阈值（Km/h） ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -160,18 +214,17 @@
 
                         <EditText
                             android:id="@+id/et_top_speed_threshold"
-                            android:layout_width="88dp"
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
                             android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- 第五项（2026-11-10）：电流记录阈值（A），默认 50 -->
+                    <!-- ========== 第五项：电流记录阈值（A） ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -188,18 +241,17 @@
 
                         <EditText
                             android:id="@+id/et_current_threshold"
-                            android:layout_width="88dp"
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
                             android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- 第六项（2026-11-10）：功率记录阈值（W），默认 1000 -->
+                    <!-- ========== 第六项：功率记录阈值（W） ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -216,20 +268,17 @@
 
                         <EditText
                             android:id="@+id/et_power_threshold"
-                            android:layout_width="88dp"
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
                             android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- 第七项（2026-11-10）：实时卡片胎压显示。
-                         三个选项：始终显示 / 始终不显示 / 胎压异常时显示。
-                         与前两项一样：一行文字 + 右侧下拉，无任何提示。 -->
+                    <!-- ========== 第七项：实时卡片胎压显示 ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -244,13 +293,43 @@
                             android:text="@string/setting_realtime_tpms_display_title"
                             android:textSize="14sp" />
 
-                        <Spinner
-                            android:id="@+id/spinner_realtime_tpms_display"
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="152dp"
                             android:layout_height="wrap_content"
-                            android:minWidth="128dp"
-                            android:dropDownWidth="190dp"
-                            android:spinnerMode="dropdown" />
+                            android:orientation="vertical">
+
+                            <FrameLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content">
+
+                            <Spinner
+                                android:id="@+id/spinner_realtime_tpms_display"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@null"
+                                android:dropDownWidth="190dp"
+                                android:paddingStart="20dp"
+                                android:paddingEnd="20dp"
+                                android:spinnerMode="dropdown" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="end|center_vertical"
+                                android:layout_marginEnd="4dp"
+                                android:clickable="false"
+                                android:focusable="false"
+                                android:importantForAccessibility="no"
+                                android:text="▾"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="14sp" />
+                            </FrameLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="?attr/colorControlNormal" />
+                        </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

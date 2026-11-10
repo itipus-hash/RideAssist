@@ -32,11 +32,11 @@
     <!-- ⭐ 连接设置页第一项（用户 2026-11-09 新增 / 2026-11-11 改名）：
          文字在左、下拉框直接在右，不写任何说明 / 提示。
          ⚠️ 标题与选项在 2026-11-11 按用户要求改过：
-            标题「连接后跳转」→「连接BMS后自动跳转」；
+            标题「连接后跳转」→「连接BMS后跳转」；
             第一项「首页」→「不跳转」（含义从「跳到首页」变成「完全不动」）；
             其余每项后面加「·页面」（实时·页面 / 数据·页面 / 导航·页面）。
          ⚠️ 顺序必须与 ConnectionSettingsActivity.setupConnectJumpTab() 里的 keys 完全一致。 -->
-    <string name="setting_connect_jump_title">连接BMS后自动跳转</string>
+    <string name="setting_connect_jump_title">连接BMS后跳转</string>
     <string name="jump_none">不跳转</string>
     <string name="jump_realtime_page">实时·页面</string>
     <string name="jump_data_page">数据·页面</string>
