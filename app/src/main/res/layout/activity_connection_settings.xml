@@ -31,11 +31,17 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- ⭐ 本页标题固定为「设置」（用户 2026-11-11：「弹出来的那个左侧 连接设置 改为设置」）。
+         ⚠️ 用本页专属的 `connection_settings_title`，**不共用**胎压设置页的
+            `title_settings` —— 两页各管各的文案，改一个不会牵连另一个。
+         ⚠️ 也不要直接用 `connection_settings`（「连接设置」）：那个仍留给
+            首页齿轮的 contentDescription 和本 Activity 在 Manifest 里的 label，
+            齿轮按钮叫「连接设置」才说明得清它进的是哪个设置。 -->
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        app:title="@string/connection_settings" />
+        app:title="@string/connection_settings_title" />
 
     <ScrollView
         android:layout_width="match_parent"

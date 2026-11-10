@@ -28,6 +28,11 @@
 
     <!-- ⭐ 首页连接卡右上角的齿轮：连上保护板后才出现，点进独立的连接设置页 -->
     <string name="connection_settings">连接设置</string>
+    <!-- ⭐ 连接设置页**页面标题**（用户 2026-11-11：「弹出来的那个左侧 连接设置 改为设置」）。
+         ⚠️ 与上面的 `connection_settings`（首页齿轮的 contentDescription / Manifest label）
+            刻意分开：按钮叫「连接设置」说明进的是哪个设置，页面标题就叫「设置」。
+         ⚠️ 也不复用胎压设置页的 `title_settings`，两页文案各管各的。 -->
+    <string name="connection_settings_title">设置</string>
 
     <!-- ⭐ 连接设置页第一项（用户 2026-11-09 新增 / 2026-11-11 改名）：
          文字在左、下拉框直接在右，不写任何说明 / 提示。
