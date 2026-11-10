@@ -8,6 +8,13 @@
   - 不写任何说明 / 提示文案；
   - 「连接BMS后自动跳转」选项：不跳转 / 实时·页面 / 数据·页面 / 导航·页面。
 
+  ⭐ 2026-11-11 对齐口径（用户：「备选和弹出来的菜单，包括下面填的数值，都要居中」）：
+  - 左侧标题一律**左对齐**；
+  - 右侧所有控件里的文字一律**居中**：下拉框选中项、下拉弹出菜单每一项、
+    数字输入框里的数值；
+  - 下拉框的居中靠代码换 item 布局实现（`bindCenteredSpinner`），
+    XML 的 `android:gravity` 对 Spinner 条目无效，所以这里**不写 entries**。
+
   2026-11-10 新增第三、四项：两项**记录阈值**（数字输入，右侧输入框）：
   - 最大压差记录阈值（mV），默认 50；
   - 极速记录阈值（Km/h），默认 50。
@@ -69,12 +76,15 @@
                             android:text="@string/setting_connect_jump_title"
                             android:textSize="14sp" />
 
+                        <!-- ⚠️ 不写 android:entries：条目改由代码套「居中」适配器
+                             （见 ConnectionSettingsActivity.bindCenteredSpinner），
+                             避免 XML 与代码两处维护同一份标签。 -->
                         <Spinner
                             android:id="@+id/spinner_connect_jump_tab"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:entries="@array/connect_jump_tab_labels"
-                            android:minWidth="120dp"
+                            android:minWidth="112dp"
+                            android:dropDownWidth="190dp"
                             android:spinnerMode="dropdown" />
                     </LinearLayout>
 
@@ -98,8 +108,8 @@
                             android:id="@+id/spinner_realtime_curve_default"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:entries="@array/curve_default_labels"
-                            android:minWidth="120dp"
+                            android:minWidth="112dp"
+                            android:dropDownWidth="190dp"
                             android:spinnerMode="dropdown" />
                     </LinearLayout>
 
@@ -122,14 +132,14 @@
 
                         <EditText
                             android:id="@+id/et_diff_threshold"
-                            android:layout_width="72dp"
+                            android:layout_width="88dp"
                             android:layout_height="wrap_content"
-                            android:gravity="end"
+                            android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="72dp"
+                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
@@ -150,14 +160,14 @@
 
                         <EditText
                             android:id="@+id/et_top_speed_threshold"
-                            android:layout_width="72dp"
+                            android:layout_width="88dp"
                             android:layout_height="wrap_content"
-                            android:gravity="end"
+                            android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="72dp"
+                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
@@ -178,14 +188,14 @@
 
                         <EditText
                             android:id="@+id/et_current_threshold"
-                            android:layout_width="72dp"
+                            android:layout_width="88dp"
                             android:layout_height="wrap_content"
-                            android:gravity="end"
+                            android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="72dp"
+                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
@@ -206,14 +216,14 @@
 
                         <EditText
                             android:id="@+id/et_power_threshold"
-                            android:layout_width="72dp"
+                            android:layout_width="88dp"
                             android:layout_height="wrap_content"
-                            android:gravity="end"
+                            android:gravity="center"
                             android:imeOptions="actionDone"
                             android:importantForAutofill="no"
                             android:inputType="numberDecimal"
                             android:maxLines="1"
-                            android:minWidth="72dp"
+                            android:minWidth="88dp"
                             android:textSize="14sp" />
                     </LinearLayout>
 
@@ -238,8 +248,8 @@
                             android:id="@+id/spinner_realtime_tpms_display"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:entries="@array/realtime_tpms_display_labels"
-                            android:minWidth="140dp"
+                            android:minWidth="128dp"
+                            android:dropDownWidth="190dp"
                             android:spinnerMode="dropdown" />
                     </LinearLayout>
                 </LinearLayout>

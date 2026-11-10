@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ⭐ 下拉框「选中项」的显示布局（用户 2026-11-11：「备选…都要居中」）。
+
+  ⚠️ 为什么必须自建这个布局：
+     系统默认的 spinner 条目是**左对齐**的，而且 `android:gravity` 设在
+     Spinner 上只作用于控件本身、不会传给条目里的 TextView —— 所以
+     「让下拉框文字居中」只能换掉 adapter 的 item 布局，没有 XML 属性捷径。
+
+  ⚠️ 必须 match_parent：宽度由 Spinner 决定，文字才能在控件内真正居中。
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:minHeight="40dp"
+    android:paddingStart="2dp"
+    android:paddingEnd="2dp"
+    android:textColor="?attr/colorOnSurface"
+    android:textSize="14sp" />

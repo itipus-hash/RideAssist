@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ⭐ 下拉框「弹出的菜单」每一项的布局（用户 2026-11-11：「弹出来的菜单…都要居中」）。
+
+  ⚠️ 与 item_spinner_center.xml 分开两个文件：选中项和弹出项的行高 / 内边距
+     需求不同（弹出项要够高好点），但**都居中**。
+
+  ⚠️ 用 paddingStart/End 而不是 paddingHorizontal —— 后者是 API 26 才有的属性，
+     minSdk 21 上会被忽略，内边距直接丢失。
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:minHeight="48dp"
+    android:paddingStart="12dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="12dp"
+    android:textColor="?attr/colorOnSurface"
+    android:textSize="14sp" />

@@ -4,7 +4,9 @@ import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.Spinner
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import io.github.supit.rideassist.R
@@ -95,6 +97,29 @@ class ConnectionSettingsActivity : AppCompatActivity() {
     }
 
     /**
+     * ⭐ 给下拉框套「文字居中」的适配器（用户 2026-11-11：
+     * 「备选和弹出来的菜单…都要居中」）。
+     *
+     * **为什么不用布局里的 `android:entries`**：
+     * 系统默认的条目布局是**左对齐**的，而 `android:gravity` 设在 Spinner 上
+     * 只作用于控件本身、传不到条目里的 TextView —— 想让文字居中只能换
+     * adapter 的 item 布局（`item_spinner_center` / `item_spinner_dropdown_center`），
+     * XML 属性没有捷径。
+     *
+     * ⚠️ 必须在 `setSelection()` **之前**调用：先设 adapter 再定选中项，
+     *    否则选中位置会被随后的 `setAdapter()` 重置回第 0 项。
+     */
+    private fun bindCenteredSpinner(spinner: Spinner, labelsRes: Int) {
+        val adapter = ArrayAdapter(
+            this,
+            R.layout.item_spinner_center,
+            resources.getStringArray(labelsRes),
+        )
+        adapter.setDropDownViewResource(R.layout.item_spinner_dropdown_center)
+        spinner.adapter = adapter
+    }
+
+    /**
      * ⭐ **连接BMS后自动跳转**（用户 2026-11-11 改名 + 改选项）。
      *
      * 选项（顺序必须与 `R.array.connect_jump_tab_labels` 完全一致）：
@@ -111,6 +136,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
             AppPrefs.TAB_OVERLAY,
         )
         val spinner = binding.spinnerConnectJumpTab
+        bindCenteredSpinner(spinner, R.array.connect_jump_tab_labels)
         val saved = keys.indexOf(prefs.connectJumpTab)
         spinner.setSelection(if (saved >= 0) saved else 0, false)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -140,6 +166,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
      */
     private fun setupCurveDefault() {
         val spinner = binding.spinnerRealtimeCurveDefault
+        bindCenteredSpinner(spinner, R.array.curve_default_labels)
         spinner.setSelection(if (prefs.realtimeCurveShowByDefault) 0 else 1, false)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
@@ -239,6 +266,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
     private fun setupRealtimeTpmsDisplay() {
         val keys = TpmsDisplayMode.ALL
         val spinner = binding.spinnerRealtimeTpmsDisplay
+        bindCenteredSpinner(spinner, R.array.realtime_tpms_display_labels)
         val saved = keys.indexOf(prefs.realtimeTpmsDisplay)
         spinner.setSelection(if (saved >= 0) saved else 0, false)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
