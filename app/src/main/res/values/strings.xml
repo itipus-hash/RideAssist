@@ -57,6 +57,8 @@
          留空 / 非法值由 RecordThreshold 统一回填 50。 -->
     <string name="setting_diff_threshold_title">最大压差记录阈值（mV）</string>
     <string name="setting_top_speed_threshold_title">极速记录阈值（Km/h）</string>
+    <string name="setting_current_threshold_title">电流记录阈值（A）</string>
+    <string name="setting_power_threshold_title">功率记录阈值（W）</string>
     <string name="bluetooth_off_title">蓝牙未开启</string>
     <string name="bluetooth_off_msg">本应用需要蓝牙连接彦阳保护板，请先开启蓝牙。</string>
     <string name="perm_required">需要权限</string>
@@ -279,13 +281,14 @@
          主界面不显示，但进入聚焦后无论有无记录都显示）：一行一条，最新在最上。
          **一次行程只记一条**（取该行程压差峰值那一帧），且压差没超过**记录阈值**
          （连接设置页可改，默认 50mV）的行程不记。
-         例：11-09 单体14 @ 3.946V 偏离 82.1mV
-         %1$s=MM-dd %2$02d=单体号 %3$.3f=该单体电压(V) %4$.1f=偏离量(mV，绝对值)
+         例：11-10 03 @ 3.923V @ 80A 偏离68.3mV
+         %1$s=MM-dd %2$02d=单体号 %3$.3f=该单体电压(V) %4$d=当时电流(A) %5$.1f=偏离量(mV)
+         ⚠️ 2026-11-10 用户要求：去掉「单体」二字、加上当时的电流。
          ⚠️ 序号用 02d 补零，日期/电压位数固定，配合等宽字体列才对得齐。 -->
     <string name="diff_history_title">最大压差单体记录</string>
     <!-- ⚠️ 空态阈值来自设置页，不能写死 50（%1$s = 当前生效阈值，如 50 / 55.5） -->
     <string name="diff_history_empty">暂无压差＞%1$s mV记录</string>
-    <string name="diff_history_row">%1$s 单体%2$02d @ %3$.3fV 偏离 %4$.1fmV</string>
+    <string name="diff_history_row">%1$s %2$02d @ %3$.3fV @ %4$dA 偏离%5$.1fmV</string>
 
     <!-- ⭐ 「最近 10 次行程的极速」历史卡（用户 2026-11-10，只在**聚焦速度卡**时出现）：
          一行一条，最新在最上，**一次行程只记一条**（取该行程极速那一帧），
@@ -296,6 +299,24 @@
     <string name="top_speed_history_title">极速记录</string>
     <string name="top_speed_history_empty">暂无极速＞%1$s Km/h记录</string>
     <string name="top_speed_history_row">%1$s 极速 %2$dKm/h @ %3$s</string>
+
+    <!-- ⭐ 「最近 10 次行程的最大电流」历史卡（2026-11-10，只在**聚焦电流卡**时出现）：
+         与极速卡完全同款，例：11-10 电流 80A @ 11:34 -->
+    <string name="current_history_title">电流记录</string>
+    <string name="current_history_empty">暂无电流＞%1$s A记录</string>
+    <string name="current_history_row">%1$s 电流 %2$dA @ %3$s</string>
+
+    <!-- ⭐ 「最近 10 次行程的最大功率」历史卡（2026-11-10，只在**聚焦功率卡**时出现）：
+         例：11-10 功率 1200W @ 11:34 -->
+    <string name="power_history_title">功率记录</string>
+    <string name="power_history_empty">暂无功率＞%1$s W记录</string>
+    <string name="power_history_row">%1$s 功率 %2$dW @ %3$s</string>
+
+    <!-- ⭐ 四张记录卡长按后的清除确认框（2026-11-10） -->
+    <string name="history_clear_title">清除记录</string>
+    <string name="history_clear_message">确定清除「%1$s」的全部记录吗？此操作不可恢复。</string>
+    <string name="history_clear_confirm">清除</string>
+    <string name="history_clear_cancel">取消</string>
 
     <!-- ==================== 底部「数据」页（本次骑行统计） ==================== -->
     <string name="ride_page_title">骑行数据</string>

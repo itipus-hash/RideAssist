@@ -569,6 +569,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:clickable="true"
+            android:focusable="true"
             android:visibility="gone"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
@@ -617,6 +619,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:clickable="true"
+            android:focusable="true"
             android:visibility="gone"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
@@ -643,6 +647,96 @@
 
                 <TextView
                     android:id="@+id/tv_top_speed_history_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 最近 10 次「最大电流」记录 ============
+             ⭐ 2026-11-10 用户要求：给电流和功率也加对应的最大值卡片。
+                结构与极速卡完全一致：聚焦**电流卡**时显示，一行一条、最新在最上，
+                无记录显示「暂无电流＞50 A记录」。
+             格式见 @string/current_history_row：11-10 电流 80A @ 11:34
+             ⚠️ clickable/focusable 是为了长按弹「清除记录」确认框（2026-11-10）。 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_current_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/current_history_title" />
+
+                <LinearLayout
+                    android:id="@+id/ll_current_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/tv_current_history_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ============ 最近 10 次「最大功率」记录 ============
+             ⭐ 2026-11-10：聚焦**功率卡**时显示，格式 11-10 功率 1200W @ 11:34 -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_power_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    style="@style/CardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/power_history_title" />
+
+                <LinearLayout
+                    android:id="@+id/ll_power_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/tv_power_history_empty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"

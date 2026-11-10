@@ -11,6 +11,7 @@ import android.util.Log
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import io.github.supit.rideassist.util.RecordThreshold
 import io.github.supit.rideassist.util.SpeedDisplay
 import android.os.SystemClock
 import android.view.GestureDetector
@@ -304,10 +305,57 @@ class RealtimeFragment : Fragment(), LocationListener {
      * 可以直接交给 GestureDetector 的 `onSingleTapConfirmed` / `onDoubleTap`，
      * 两者互不干扰，**不再需要任何延迟判定**。
      */
+    // ==================== ⭐ 记录卡长按清除（用户 2026-11-10） ====================
+
+    /**
+     * 四张「记录」卡长按 → 弹确认框 → 清除该卡的全部历史。
+     *
+     * 用户原话：「所有最大值卡片长按后提醒是否清除记录」。
+     *
+     * 只清**被长按的那一张**（连同它的落盘文件），不影响其它三张、
+     * 也不影响本次会话峰值记录卡 —— 峰值是「本次骑行」的实时结果，
+     * 记录卡才是需要手动清理的历史。
+     *
+     * ⚠️ 卡片必须 `clickable/focusable`（布局已设），否则长按事件收不到。
+     */
+    private fun setupHistoryClearGestures() {
+        val b = _binding ?: return
+        bindHistoryClear(b.cardDiffHistory, R.string.diff_history_title) {
+            tracker.clearDiffHistory()
+        }
+        bindHistoryClear(b.cardTopSpeedHistory, R.string.top_speed_history_title) {
+            tracker.clearTopSpeedHistory()
+        }
+        bindHistoryClear(b.cardCurrentHistory, R.string.current_history_title) {
+            tracker.clearMetricHistory(SessionSpeedTracker.CARD_CURRENT)
+        }
+        bindHistoryClear(b.cardPowerHistory, R.string.power_history_title) {
+            tracker.clearMetricHistory(SessionSpeedTracker.CARD_POWER)
+        }
+    }
+
+    private fun bindHistoryClear(card: View, titleRes: Int, clear: () -> Unit) {
+        card.setOnLongClickListener {
+            val ctx = context ?: return@setOnLongClickListener false
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setTitle(R.string.history_clear_title)
+                .setMessage(
+                    getString(R.string.history_clear_message, getString(titleRes))
+                )
+                .setNegativeButton(R.string.history_clear_cancel, null)
+                .setPositiveButton(R.string.history_clear_confirm) { _, _ ->
+                    clear()
+                    // 立刻重绘：卡片还在聚焦态，清空后应马上变成空态文案
+                    renderPeakSection()
+                }
+                .show()
+            true
+        }
+    }
+
     private fun setupCardGestures() {
         val b = _binding ?: return
-        cardViews().forEachIndexed { index, card ->
-            val detector = GestureDetector(
+        cardViews().forEachIndexed { index, card ->            val detector = GestureDetector(
                 requireContext(),
                 object : GestureDetector.SimpleOnGestureListener() {
                     override fun onDown(e: MotionEvent) = true
@@ -753,8 +801,10 @@ class RealtimeFragment : Fragment(), LocationListener {
         setTopMargin(b.cardPeakRecord, if (focus == null) 0 else gap)
         // 压差历史卡跟在记录卡下面，同属聚焦附属卡，按聚焦态统一间距
         setTopMargin(b.cardDiffHistory, if (focus == null) 0 else gap)
-        // 极速记录卡是速度卡的附属卡（2026-11-10），同口径
+        // 极速 / 电流 / 功率记录卡同理（各自只在对应卡片聚焦时可见）
         setTopMargin(b.cardTopSpeedHistory, if (focus == null) 0 else gap)
+        setTopMargin(b.cardCurrentHistory, if (focus == null) 0 else gap)
+        setTopMargin(b.cardPowerHistory, if (focus == null) 0 else gap)
     }
 
     /** 设置 topMargin（已是目标像素值时跳过，避免重复触发 layout） */
@@ -790,6 +840,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         redrawFromTracker()
         observeBatteryData()
         setupCardGestures()
+        setupHistoryClearGestures()
         startRealtimeClock()
         // ⭐⭐ **首次进入必须显式同步一次显隐状态**（用户反馈：
         //「首次进去实时界面，除了电流卡片，其他 3 个卡片都默认显示了曲线」）。
@@ -1311,6 +1362,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         renderPeakRecordCard()
         renderDiffHistoryCard()
         renderTopSpeedHistoryCard()
+        renderCurrentHistoryCard()
+        renderPowerHistoryCard()
     }
 
     /**
@@ -1384,7 +1437,8 @@ class RealtimeFragment : Fragment(), LocationListener {
 
             val e = rows[i]
             val line = getString(
-                R.string.diff_history_row, e.date, e.cellIndex, e.cellVolt, e.deviationMv
+                R.string.diff_history_row,
+                e.date, e.cellIndex, e.cellVolt, e.currentA.toInt(), e.deviationMv,
             )
             if (tv.text.toString() != line) tv.text = line
 
@@ -1414,44 +1468,36 @@ class RealtimeFragment : Fragment(), LocationListener {
     }
 
     /**
-     * 渲染「最近 10 次行程的极速」历史卡（用户 2026-11-10）。
+     * 渲染「最近 10 次行程的极速 / 电流 / 功率」历史卡（用户 2026-11-10）。
      *
-     * 口径与上面的压差历史卡**完全对称**：
-     * - **只在聚焦速度卡时出现**；主界面 / 聚焦其它卡整卡 GONE；
-     * - 聚焦速度卡后**始终显示**，无记录时显示「暂无极速＞50 Km/h记录」；
-     * - 一条 = 一次行程（速度没超过记录阈值的不记），同行程只保留更快的那次；
-     * - 最新在最上，顺序由 [SessionSpeedTracker.topSpeedHistory] 保证；
-     * - 单独落盘，重开 APP 仍在；用户显式清空会话才清空。
+     * 三者结构与口径完全一致，只是数值、单位、阈值和归属卡片不同，
+     * 所以共用一个渲染器（避免三份 70 行重复代码）：
+     * - **只在聚焦对应卡片时出现**；主界面 / 聚焦其它卡整卡 GONE；
+     * - 聚焦后**始终显示**，无记录时显示「暂无XX＞阈值 单位记录」；
+     * - 一条 = 一次行程（没超过记录阈值的不记），同行程只保留更极端的值；
+     * - 最新在最上，顺序由 tracker 的列表保证；
+     * - 单独落盘，重开 APP 仍在；用户显式清空会话 / 长按卡片清除才清空。
      *
-     * 行格式：`11-10 极速 55Km/h @ 11:34`（@string/top_speed_history_row）。
-     *
-     * ⚠️ 与压差卡同样复用 TextView，不要缓存 View 到 Fragment 字段。
+     * ⚠️ 行是复用的 TextView，不要缓存 View 到 Fragment 字段（重建后会持有旧布局）。
+     * ⚠️ 容器里只有数据行；标题与空态是它的兄弟节点。
      */
-    private fun renderTopSpeedHistoryCard() {
-        val b = _binding ?: return
-        val visible = focusedCardIndex == CARD_SPEED
-        b.cardTopSpeedHistory.visibility = if (visible) View.VISIBLE else View.GONE
-        if (!visible) return
-
-        val rows = tracker.topSpeedHistory
+    private fun renderMetricHistoryCard(
+        card: View,
+        container: LinearLayout,
+        emptyView: TextView,
+        rows: List<SessionSpeedTracker.MetricHistoryEntry>,
+        emptyFmtRes: Int,
+        rowFmtRes: Int,
+        thresholdLabel: String,
+    ) {
         val emptyVisibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
-        if (b.tvTopSpeedHistoryEmpty.visibility != emptyVisibility) {
-            b.tvTopSpeedHistoryEmpty.visibility = emptyVisibility
-        }
+        if (emptyView.visibility != emptyVisibility) emptyView.visibility = emptyVisibility
         if (rows.isEmpty()) {
             // ⭐ 阈值来自连接设置页，空态文案跟着变
-            val empty = getString(
-                R.string.top_speed_history_empty,
-                io.github.supit.rideassist.util.RecordThreshold.label(
-                    tracker.currentThresholds.topSpeedKmh
-                ),
-            )
-            if (b.tvTopSpeedHistoryEmpty.text.toString() != empty) {
-                b.tvTopSpeedHistoryEmpty.text = empty
-            }
+            val empty = getString(emptyFmtRes, thresholdLabel)
+            if (emptyView.text.toString() != empty) emptyView.text = empty
         }
 
-        val container = b.llTopSpeedHistory
         val rowGapPx = (4 * resources.displayMetrics.density).toInt()
         while (container.childCount < rows.size) {
             container.addView(TextView(container.context).apply {
@@ -1473,9 +1519,7 @@ class RealtimeFragment : Fragment(), LocationListener {
             if (tv.visibility != View.VISIBLE) tv.visibility = View.VISIBLE
 
             val e = rows[i]
-            val line = getString(
-                R.string.top_speed_history_row, e.date, e.speedKmh, e.clock
-            )
+            val line = getString(rowFmtRes, e.date, e.value, e.clock)
             if (tv.text.toString() != line) tv.text = line
 
             // 第一行（最新）用主色加粗，其余中性灰（与压差卡一致）
@@ -1501,6 +1545,66 @@ class RealtimeFragment : Fragment(), LocationListener {
                 tv.layoutParams = lp
             }
         }
+        card.visibility = View.VISIBLE
+    }
+
+    /** 极速卡：聚焦速度卡时显示 */
+    private fun renderTopSpeedHistoryCard() {
+        val b = _binding ?: return
+        if (focusedCardIndex != CARD_SPEED) {
+            b.cardTopSpeedHistory.visibility = View.GONE
+            return
+        }
+        renderMetricHistoryCard(
+            card = b.cardTopSpeedHistory,
+            container = b.llTopSpeedHistory,
+            emptyView = b.tvTopSpeedHistoryEmpty,
+            rows = tracker.topSpeedHistory.map {
+                SessionSpeedTracker.MetricHistoryEntry(it.tripId, it.speedKmh, it.date, it.clock)
+            },
+            emptyFmtRes = R.string.top_speed_history_empty,
+            rowFmtRes = R.string.top_speed_history_row,
+            thresholdLabel = RecordThreshold.label(tracker.currentThresholds.topSpeedKmh),
+        )
+    }
+
+    /** 电流卡：聚焦电流卡时显示（用户 2026-11-10） */
+    private fun renderCurrentHistoryCard() {
+        val b = _binding ?: return
+        if (focusedCardIndex != CARD_CURRENT) {
+            b.cardCurrentHistory.visibility = View.GONE
+            return
+        }
+        renderMetricHistoryCard(
+            card = b.cardCurrentHistory,
+            container = b.llCurrentHistory,
+            emptyView = b.tvCurrentHistoryEmpty,
+            rows = tracker.currentHistory,
+            emptyFmtRes = R.string.current_history_empty,
+            rowFmtRes = R.string.current_history_row,
+            thresholdLabel = RecordThreshold.label(tracker.currentThresholds.currentA),
+        )
+    }
+
+    /** 功率卡：聚焦功率卡时显示（用户 2026-11-10） */
+    private fun renderPowerHistoryCard() {
+        val b = _binding ?: return
+        if (focusedCardIndex != CARD_POWER) {
+            b.cardPowerHistory.visibility = View.GONE
+            return
+        }
+        renderMetricHistoryCard(
+            card = b.cardPowerHistory,
+            container = b.llPowerHistory,
+            emptyView = b.tvPowerHistoryEmpty,
+            rows = tracker.powerHistory,
+            emptyFmtRes = R.string.power_history_empty,
+            rowFmtRes = R.string.power_history_row,
+            thresholdLabel = RecordThreshold.label(
+                tracker.currentThresholds.powerW,
+                RecordThreshold.DEFAULT_POWER,
+            ),
+        )
     }
 
     /**

@@ -176,6 +176,7 @@ class SessionSpeedTracker : ViewModel() {
      * @param cellIndex   单体序号，1-based（与峰值记录卡同口径）
      * @param cellVolt    该单体当时的电压（V，3 位小数显示）
      * @param deviationMv 相对其余电芯均值的偏离量绝对值（mV，1 位小数显示）
+     * @param currentA    ⭐ 该帧的工作电流（A，整数显示；用户 2026-11-10 要求加上）
      */
     data class DiffHistoryEntry(
         val tripId: Long,
@@ -184,6 +185,7 @@ class SessionSpeedTracker : ViewModel() {
         val cellIndex: Int,
         val cellVolt: Float,
         val deviationMv: Float,
+        val currentA: Float = 0f,
     )
 
     /**
@@ -236,14 +238,19 @@ class SessionSpeedTracker : ViewModel() {
     // ==================== ⭐ 跨 APP 重启的落盘 / 恢复 ====================
 
     /**
-     * 纯文本行格式：每行一条，`|` 分隔 6 个字段
-     * `tripId|diffMv|date|cellIndex|cellVolt|deviationMv`。
+     * 纯文本行格式：每行一条，`|` 分隔 7 个字段
+     * `tripId|diffMv|date|cellIndex|cellVolt|deviationMv|currentA`。
      * 字段都是数字 / MM-dd，不含分隔符，无需转义；损坏行在恢复时跳过。
+     *
+     * ⚠️ 2026-11-10 起多了第 7 个字段（当时的工作电流）。**不做旧格式兼容**：
+     *    用户要求先清空既有记录，旧版 6 字段行会被当成坏行跳过，
+     *    所以这里保持严格 7 字段，不写兼容分支。
      */
     fun encodeDiffHistory(): String = diffHistory.joinToString("\n") { e ->
         listOf(
             e.tripId.toString(), e.diffMv.toString(), e.date,
             e.cellIndex.toString(), e.cellVolt.toString(), e.deviationMv.toString(),
+            e.currentA.toString(),
         ).joinToString("|")
     }
 
@@ -259,15 +266,17 @@ class SessionSpeedTracker : ViewModel() {
         if (raw.isBlank()) return
         val rows = raw.lineSequence().mapNotNull { line ->
             val p = line.split('|')
-            if (p.size != 6) return@mapNotNull null
+            if (p.size != 7) return@mapNotNull null
             val tripId = p[0].toLongOrNull() ?: return@mapNotNull null
             val diffMv = p[1].toFloatOrNull() ?: return@mapNotNull null
             val cellIndex = p[3].toIntOrNull() ?: return@mapNotNull null
             val cellVolt = p[4].toFloatOrNull() ?: return@mapNotNull null
             val deviationMv = p[5].toFloatOrNull() ?: return@mapNotNull null
+            val currentA = p[6].toFloatOrNull() ?: return@mapNotNull null
             DiffHistoryEntry(
                 tripId = tripId, diffMv = diffMv, date = p[2],
                 cellIndex = cellIndex, cellVolt = cellVolt, deviationMv = deviationMv,
+                currentA = currentA,
             )
         }
             // 按行程序号倒序 = 最新在最上；即使落盘串的行序被写乱也能自愈
@@ -303,21 +312,31 @@ class SessionSpeedTracker : ViewModel() {
     )
 
     /**
-     * 两项记录阈值。**由 YybmsApp 注入「实时读 AppPrefs」的 provider**：
+     * 四项记录阈值。**由 YybmsApp 注入「实时读 AppPrefs」的 provider**：
      * 用户在连接设置页改完数字，下一帧就生效，不需要重建 tracker；
-     * 纯 JVM 单测不注入时用 [MIN_DIFF_HISTORY_MV] / [MIN_TOP_SPEED_HISTORY_KMH]。
+     * 纯 JVM 单测不注入时用下面四个 `MIN_*` 常量兜底。
      *
      * ⚠️ 阈值只决定「记不记历史」，不影响会话峰值卡与曲线。
      */
-    data class RecordThresholds(val diffMv: Float, val topSpeedKmh: Float)
+    data class RecordThresholds(
+        val diffMv: Float,
+        val topSpeedKmh: Float,
+        val currentA: Float = MIN_CURRENT_HISTORY_A,
+        val powerW: Float = MIN_POWER_HISTORY_W,
+    )
 
     @Volatile
     var thresholdsProvider: (() -> RecordThresholds)? = null
 
     private fun thresholds(): RecordThresholds = thresholdsProvider?.invoke()
-        ?: RecordThresholds(MIN_DIFF_HISTORY_MV, MIN_TOP_SPEED_HISTORY_KMH)
+        ?: RecordThresholds(
+            MIN_DIFF_HISTORY_MV,
+            MIN_TOP_SPEED_HISTORY_KMH,
+            MIN_CURRENT_HISTORY_A,
+            MIN_POWER_HISTORY_W,
+        )
 
-    /** 当前生效的阈值（实时页两张历史卡的空态文案用） */
+    /** 当前生效的阈值（实时页四张历史卡的空态文案用） */
     val currentThresholds: RecordThresholds get() = thresholds()
 
     /**
@@ -377,6 +396,164 @@ class SessionSpeedTracker : ViewModel() {
         var max = tripSeq
         for (id in ids) if (id > max) max = id
         tripSeq = max
+    }
+
+    // ==================== ⭐ 电流 / 功率历史（用户 2026-11-10） ====================
+
+    /**
+     * 一次行程里**超过阈值的最大电流 / 最大功率**那一刻的快照。
+     *
+     * 极速、电流、功率三者结构完全一样（一个整数 + 日期 + 时刻），
+     * 所以共用一个 data class，只在落盘文件和阈值上区分。
+     * 显示格式：`11-10 电流 80A @ 11:34` / `11-10 功率 1200W @ 11:34`
+     *
+     * @param tripId 所属行程序号（四份历史共用一套编号，不显示）
+     * @param value  该行程的峰值（A 或 W，整数，与页面显示口径一致）
+     * @param date   MM-dd
+     * @param clock  HH:mm
+     */
+    data class MetricHistoryEntry(
+        val tripId: Long,
+        val value: Int,
+        val date: String,
+        val clock: String,
+    )
+
+    /** ⭐ 最近 [MAX_METRIC_HISTORY] 次行程的最大电流（A），最新在最前 */
+    @Volatile
+    var currentHistory: List<MetricHistoryEntry> = emptyList()
+        private set
+
+    /** ⭐ 最近 [MAX_METRIC_HISTORY] 次行程的最大功率（W），最新在最前 */
+    @Volatile
+    var powerHistory: List<MetricHistoryEntry> = emptyList()
+        private set
+
+    /** 电流历史变化时的落盘回调（参数是 [encodeCurrentHistory] 的结果） */
+    @Volatile
+    var currentHistorySink: ((String) -> Unit)? = null
+
+    /** 功率历史变化时的落盘回调（参数是 [encodePowerHistory] 的结果） */
+    @Volatile
+    var powerHistorySink: ((String) -> Unit)? = null
+
+    private fun appendMetricHistory(index: Int, entry: MetricHistoryEntry) {
+        val previous = if (index == CARD_CURRENT) currentHistory else powerHistory
+        val next = if (previous.firstOrNull()?.tripId == entry.tripId) {
+            listOf(entry) + previous.drop(1)          // 同行程：替换成更大的值
+        } else {
+            listOf(entry) + previous.take(MAX_METRIC_HISTORY - 1)
+        }
+        if (index == CARD_CURRENT) {
+            currentHistory = next
+            currentHistorySink?.invoke(encodeCurrentHistory())
+        } else {
+            powerHistory = next
+            powerHistorySink?.invoke(encodePowerHistory())
+        }
+    }
+
+    /** `tripId|value|date|clock`；字段不含分隔符，坏行恢复时跳过 */
+    private fun encodeMetric(list: List<MetricHistoryEntry>): String =
+        list.joinToString("\n") { e ->
+            listOf(
+                e.tripId.toString(), e.value.toString(), e.date, e.clock,
+            ).joinToString("|")
+        }
+
+    fun encodeCurrentHistory(): String = encodeMetric(currentHistory)
+
+    fun encodePowerHistory(): String = encodeMetric(powerHistory)
+
+    private fun decodeMetric(raw: String): List<MetricHistoryEntry> =
+        raw.lineSequence().mapNotNull { line ->
+            val p = line.split('|')
+            if (p.size != 4) return@mapNotNull null
+            val tripId = p[0].toLongOrNull() ?: return@mapNotNull null
+            val value = p[1].toIntOrNull() ?: return@mapNotNull null
+            MetricHistoryEntry(tripId, value, p[2], p[3])
+        }
+            .sortedByDescending { it.tripId }
+            .take(MAX_METRIC_HISTORY)
+            .toList()
+
+    fun restoreCurrentHistory(raw: String) {
+        if (raw.isBlank()) return
+        val rows = decodeMetric(raw)
+        currentHistory = rows
+        bumpTripSeq(rows.map { it.tripId })
+    }
+
+    fun restorePowerHistory(raw: String) {
+        if (raw.isBlank()) return
+        val rows = decodeMetric(raw)
+        powerHistory = rows
+        bumpTripSeq(rows.map { it.tripId })
+    }
+
+    /**
+     * ⭐⭐ **电流 / 功率历史的唯一写入口**，与极速历史完全对称，
+     * 同样挂在 [updatePeak] 的**会话峰值门控之前**。
+     *
+     * @param index 只接受 [CARD_CURRENT] / [CARD_POWER]，其它值直接忽略
+     */
+    private fun updateMetricHistory(index: Int, value: Float, now: java.util.Date) {
+        val threshold = when (index) {
+            CARD_CURRENT -> thresholds().currentA
+            CARD_POWER -> thresholds().powerW
+            else -> return
+        }
+        val trip = tripSeq
+        if (!isRecording || trip <= 0L) return
+        val v = value.toInt()                    // 与峰值卡 / 页面整数口径一致
+        if (v.toFloat() <= threshold) return
+        val previous = if (index == CARD_CURRENT) currentHistory else powerHistory
+        val current = previous.firstOrNull { it.tripId == trip }
+        if (current != null && v <= current.value) return
+        appendMetricHistory(
+            index,
+            MetricHistoryEntry(
+                tripId = trip,
+                value = v,
+                date = DATE_FORMAT.format(now),
+                clock = CLOCK_FORMAT.format(now),
+            ),
+        )
+    }
+
+    // ==================== ⭐ 手动清除单张卡的历史（长按卡片用） ====================
+
+    /**
+     * 清空「最大压差单体记录」并同步落盘。
+     * 只清这一份，不影响其它三项历史与会话峰值。
+     */
+    fun clearDiffHistory() {
+        if (diffHistory.isEmpty()) return
+        diffHistory = emptyList()
+        persistDiffHistory()
+    }
+
+    /** 清空「极速记录」并同步落盘 */
+    fun clearTopSpeedHistory() {
+        if (topSpeedHistory.isEmpty()) return
+        topSpeedHistory = emptyList()
+        persistTopSpeedHistory()
+    }
+
+    /** 清空「电流记录」或「功率记录」并同步落盘；其它 index 忽略 */
+    fun clearMetricHistory(index: Int) {
+        when (index) {
+            CARD_CURRENT -> {
+                if (currentHistory.isEmpty()) return
+                currentHistory = emptyList()
+                currentHistorySink?.invoke(encodeCurrentHistory())
+            }
+            CARD_POWER -> {
+                if (powerHistory.isEmpty()) return
+                powerHistory = emptyList()
+                powerHistorySink?.invoke(encodePowerHistory())
+            }
+        }
     }
 
     /**
@@ -447,6 +624,8 @@ class SessionSpeedTracker : ViewModel() {
                 cellIndex = outlier.first + 1,
                 cellVolt = if (outlier.first >= 0) v[outlier.first] else 0f,
                 deviationMv = kotlin.math.abs(outlier.second) * 1000f,
+                // ⭐ 用户 2026-11-10：记录格式里要显示「当时的电流」
+                currentA = d.totalCurrent,
             )
         )
     }
@@ -1047,6 +1226,11 @@ class SessionSpeedTracker : ViewModel() {
         //    否则第 2 次行程没破整段会话极速就一条都记不到。
         if (index == CARD_SPEED) updateTopSpeedHistory(value, now)
 
+        // ⭐⭐ 电流 / 功率历史（2026-11-10）同口径：按行程统计，放在门控之前
+        if (index == CARD_CURRENT || index == CARD_POWER) {
+            updateMetricHistory(index, value, now)
+        }
+
         val cur = peakRecords[index]
         if (cur != null && value <= cur.value) return false    // 没超过历史最大
 
@@ -1170,9 +1354,13 @@ class SessionSpeedTracker : ViewModel() {
         diffPoints.clear()
         diffHistory = emptyList()
         topSpeedHistory = emptyList()
+        currentHistory = emptyList()
+        powerHistory = emptyList()
         tripSeq = 0L             // ⭐ 会话清空 = 行程计数重新从 1 开始
         persistDiffHistory()     // ⭐ 同步清掉落盘，避免重开 APP 旧记录「复活」
-        persistTopSpeedHistory() // ⭐ 极速历史同口径：清空也要落盘
+        persistTopSpeedHistory() // ⭐ 极速 / 电流 / 功率历史同口径：清空也要落盘
+        currentHistorySink?.invoke(encodeCurrentHistory())
+        powerHistorySink?.invoke(encodePowerHistory())
         java.util.Arrays.fill(peakRecords, null)
         _peakRevision.update { it + 1 }
         // ⭐ maxSpeed 也归零了，必须通知订阅方（悬浮窗的「极速」），
@@ -1244,6 +1432,9 @@ class SessionSpeedTracker : ViewModel() {
         /** 极速历史保留条数（最近 10 次行程，最新在最上） */
         const val MAX_TOP_SPEED_HISTORY = 10
 
+        /** 电流 / 功率历史保留条数（最近 10 次行程，最新在最上） */
+        const val MAX_METRIC_HISTORY = 10
+
         /**
          * ⭐ **极速历史的最小速度（Km/h）**：没超过 50Km/h 不记录。
          *
@@ -1251,6 +1442,19 @@ class SessionSpeedTracker : ViewModel() {
          * 「极速记录阈值（Km/h）」决定，经 [thresholdsProvider] 实时读取。
          */
         const val MIN_TOP_SPEED_HISTORY_KMH = 50f
+
+        /**
+         * ⭐ **电流历史的最小电流（A）**：没超过 50A 不记录。
+         * 默认值，实际由连接设置页的「电流记录阈值（A）」决定。
+         */
+        const val MIN_CURRENT_HISTORY_A = 50f
+
+        /**
+         * ⭐ **功率历史的最小功率（W）**：没超过 1000W 不记录。
+         * 默认值，实际由连接设置页的「功率记录阈值（W）」决定。
+         * ⚠️ 与压差 / 极速不是一个量级，别跟着写成 50。
+         */
+        const val MIN_POWER_HISTORY_W = 1000f
 
         /**
          * **停止记录**的判据：断开保护板连接超过这么久。

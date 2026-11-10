@@ -12,7 +12,10 @@
   2026-11-10 新增第三、四项：两项**记录阈值**（数字输入，右侧输入框）：
   - 最大压差记录阈值（mV），默认 50；
   - 极速记录阈值（Km/h），默认 50。
-  留空或填非法值 → 失焦 / 关闭页面时回填 50（见 RecordThreshold）。
+  同日又加第五、六项（电流 / 功率）：
+  - 电流记录阈值（A），默认 50；
+  - 功率记录阈值（W），默认 1000。
+  留空或填非法值 → 失焦 / 关闭页面时回填各自默认值（见 RecordThreshold）。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -144,6 +147,62 @@
 
                         <EditText
                             android:id="@+id/et_top_speed_threshold"
+                            android:layout_width="72dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="end"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1"
+                            android:minWidth="72dp"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- 第五项（2026-11-10）：电流记录阈值（A），默认 50 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_current_threshold_title"
+                            android:textSize="14sp" />
+
+                        <EditText
+                            android:id="@+id/et_current_threshold"
+                            android:layout_width="72dp"
+                            android:layout_height="wrap_content"
+                            android:gravity="end"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberDecimal"
+                            android:maxLines="1"
+                            android:minWidth="72dp"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- 第六项（2026-11-10）：功率记录阈值（W），默认 1000 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_power_threshold_title"
+                            android:textSize="14sp" />
+
+                        <EditText
+                            android:id="@+id/et_power_threshold"
                             android:layout_width="72dp"
                             android:layout_height="wrap_content"
                             android:gravity="end"

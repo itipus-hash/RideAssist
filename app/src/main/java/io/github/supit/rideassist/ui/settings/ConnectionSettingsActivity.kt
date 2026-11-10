@@ -20,18 +20,22 @@ import io.github.supit.rideassist.util.RecordThreshold
  * 连接设置是「连上保护板之后才用得上」的东西，混进胎压页既不好找，
  * 也会让两处设置互相挤占版面。
  *
- * 目前四项，风格一致（文字在左、控件直接在右、无说明文案）：
+ * 目前六项，风格一致（文字在左、控件直接在右、无说明文案）：
  * 1. **连接后跳转** —— 连上保护板后切到哪个标签页，默认「首页」；
  * 2. **实时曲线默认**（2026-11-09 新增）—— 进入实时页时曲线默认
  *    「显示曲线」还是「不显示曲线」，默认后者（保持旧体验）；
  * 3. **最大压差记录阈值（mV）**（2026-11-10 新增）—— 聚焦压差卡的历史卡
  *    只记录压差严格大于该值的行程，默认 50；
  * 4. **极速记录阈值（Km/h）**（2026-11-10 新增）—— 聚焦速度卡的历史卡
- *    只记录速度严格大于该值的行程，默认 50。
+ *    只记录速度严格大于该值的行程，默认 50；
+ * 5. **电流记录阈值（A）**（2026-11-10 新增）—— 聚焦电流卡的历史卡
+ *    只记录电流严格大于该值的行程，默认 50；
+ * 6. **功率记录阈值（W）**（2026-11-10 新增）—— 聚焦功率卡的历史卡
+ *    只记录功率严格大于该值的行程，默认 **1000**（量级不同，别跟着写 50）。
  *
- * ⚠️ 3、4 两项留空 / 填非法值（负数、NaN、非数字）一律按 [RecordThreshold.DEFAULT]
- *    处理：失焦、按键盘「完成」、退出页面三个时机都会把输入框回填成实际生效值，
- *    用户不会看到「空着但其实是 50」的困惑状态。
+ * ⚠️ 3~6 四项留空 / 填非法值（负数、NaN、非数字）一律按各自的
+ *    [RecordThreshold] 默认值处理：失焦、按键盘「完成」、退出页面三个时机
+ *    都会把输入框回填成实际生效值，用户不会看到「空着但其实是默认值」的困惑状态。
  */
 class ConnectionSettingsActivity : AppCompatActivity() {
 
@@ -68,8 +72,18 @@ class ConnectionSettingsActivity : AppCompatActivity() {
      */
     override fun onPause() {
         super.onPause()
-        commitThreshold(binding.etDiffThreshold) { prefs.diffRecordThresholdMv = it }
-        commitThreshold(binding.etTopSpeedThreshold) { prefs.topSpeedRecordThresholdKmh = it }
+        commitThreshold(binding.etDiffThreshold, RecordThreshold.DEFAULT) {
+            prefs.diffRecordThresholdMv = it
+        }
+        commitThreshold(binding.etTopSpeedThreshold, RecordThreshold.DEFAULT) {
+            prefs.topSpeedRecordThresholdKmh = it
+        }
+        commitThreshold(binding.etCurrentThreshold, RecordThreshold.DEFAULT) {
+            prefs.currentRecordThresholdA = it
+        }
+        commitThreshold(binding.etPowerThreshold, RecordThreshold.DEFAULT_POWER) {
+            prefs.powerRecordThresholdW = it
+        }
     }
 
     /**
@@ -144,23 +158,42 @@ class ConnectionSettingsActivity : AppCompatActivity() {
      * 用户看到什么就是什么，不用猜。
      */
     private fun setupRecordThresholds() {
-        bindThresholdInput(binding.etDiffThreshold, prefs.diffRecordThresholdMv) {
-            prefs.diffRecordThresholdMv = it
-        }
+        bindThresholdInput(
+            binding.etDiffThreshold,
+            prefs.diffRecordThresholdMv,
+            RecordThreshold.DEFAULT,
+        ) { prefs.diffRecordThresholdMv = it }
         bindThresholdInput(
             binding.etTopSpeedThreshold,
             prefs.topSpeedRecordThresholdKmh,
+            RecordThreshold.DEFAULT,
         ) { prefs.topSpeedRecordThresholdKmh = it }
+        bindThresholdInput(
+            binding.etCurrentThreshold,
+            prefs.currentRecordThresholdA,
+            RecordThreshold.DEFAULT,
+        ) { prefs.currentRecordThresholdA = it }
+        // ⚠️ 功率默认 1000W，不是 50
+        bindThresholdInput(
+            binding.etPowerThreshold,
+            prefs.powerRecordThresholdW,
+            RecordThreshold.DEFAULT_POWER,
+        ) { prefs.powerRecordThresholdW = it }
     }
 
-    private fun bindThresholdInput(edit: EditText, current: Float, save: (Float) -> Unit) {
-        edit.setText(RecordThreshold.label(current))
+    private fun bindThresholdInput(
+        edit: EditText,
+        current: Float,
+        default: Float,
+        save: (Float) -> Unit,
+    ) {
+        edit.setText(RecordThreshold.label(current, default))
         edit.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) commitThreshold(edit, save)
+            if (!hasFocus) commitThreshold(edit, default, save)
         }
         edit.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
-                commitThreshold(edit, save)
+                commitThreshold(edit, default, save)
                 edit.clearFocus()
                 true
             } else {
@@ -170,10 +203,10 @@ class ConnectionSettingsActivity : AppCompatActivity() {
     }
 
     /** 解析 → 写偏好 → 回填「实际生效值」；对同一个输入框重复调用是幂等的 */
-    private fun commitThreshold(edit: EditText, save: (Float) -> Unit) {
-        val value = RecordThreshold.parse(edit.text.toString())
+    private fun commitThreshold(edit: EditText, default: Float, save: (Float) -> Unit) {
+        val value = RecordThreshold.parse(edit.text.toString(), default)
         save(value)
-        val label = RecordThreshold.label(value)
+        val label = RecordThreshold.label(value, default)
         if (edit.text.toString() != label) edit.setText(label)
     }
 }

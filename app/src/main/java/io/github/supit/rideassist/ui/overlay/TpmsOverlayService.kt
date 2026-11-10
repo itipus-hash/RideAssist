@@ -224,12 +224,7 @@ class TpmsOverlayService : android.app.Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
-        // ⭐ 一次性回归默认成对顺序（拆分胎压/新增实时项后旧顺序失配）
         val app = application as YybmsApp
-        if (app.prefs.overlayOrder.isNotEmpty() && !app.prefs.pairResetDone) {
-            app.prefs.overlayOrder = ""
-            app.prefs.pairResetDone = true
-        }
         val prefs = app.prefs
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         windowManager = wm

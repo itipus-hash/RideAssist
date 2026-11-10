@@ -263,6 +263,39 @@ class AppPrefs(context: Context) {
             putFloat(KEY_TOP_SPEED_RECORD_THRESHOLD, RecordThreshold.normalize(value))
         }
 
+    /**
+     * ⭐ **电流记录阈值（A）**（用户 2026-11-10）。
+     *
+     * 只影响「电流记录」历史卡：行程电流**严格大于**本值才记一条。
+     * 默认 50A，留空 / 非法 / 负数同样归一回 50。
+     */
+    var currentRecordThresholdA: Float
+        get() = RecordThreshold.normalize(
+            sp.getFloat(KEY_CURRENT_RECORD_THRESHOLD, RecordThreshold.DEFAULT)
+        )
+        set(value) = sp.edit {
+            putFloat(KEY_CURRENT_RECORD_THRESHOLD, RecordThreshold.normalize(value))
+        }
+
+    /**
+     * ⭐ **功率记录阈值（W）**（用户 2026-11-10）。
+     *
+     * 只影响「功率记录」历史卡：行程功率**严格大于**本值才记一条。
+     * ⚠️ 默认 [RecordThreshold.DEFAULT_POWER] = 1000W，不是 50 —— 与压差 / 极速
+     *    不是一个量级，50W 会让每一帧都超过阈值，历史卡失去意义。
+     */
+    var powerRecordThresholdW: Float
+        get() = RecordThreshold.normalize(
+            sp.getFloat(KEY_POWER_RECORD_THRESHOLD, RecordThreshold.DEFAULT_POWER),
+            RecordThreshold.DEFAULT_POWER,
+        )
+        set(value) = sp.edit {
+            putFloat(
+                KEY_POWER_RECORD_THRESHOLD,
+                RecordThreshold.normalize(value, RecordThreshold.DEFAULT_POWER),
+            )
+        }
+
     /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
     var overlayShowSpace: Boolean
         get() = sp.getBoolean("overlay_show_space", false)
@@ -283,101 +316,32 @@ class AppPrefs(context: Context) {
     fun extraSpaceSize(n: Int): Int = sp.getInt("overlay_size_space_$n", 1)
     fun setExtraSpaceSize(n: Int, v: Int) = sp.edit { putInt("overlay_size_space_$n", v) }
 
-    /** ⭐ 悬浮项目成对重排的一次性标记 */
-    var pairResetDone: Boolean
-        get() = sp.getBoolean("overlay_pair_reset_done", false)
-        set(value) = sp.edit { putBoolean("overlay_pair_reset_done", value) }
-
     /**
-     * 快捷导航列表（JSON 数组：[{"name":"...","uri":"..."}]，支持多个）。
+     * 快捷导航列表（JSON 数组 `[{"value":"...","label":"..."}]`，支持多个）。
      *
      * ⭐ **首次使用时预置一个「坐标获取」按钮**（高德地图坐标拾取工具）。
      * - 预置只在**这个 key 从未被写过**时发生（raw == null）；
      * - 用户把预置项删掉后 key 依然存在（值为 "[]"），**不会**再自动加回来 ——
      *   「默认存在但可以删除」两条都满足；
      * - 清空 APP 数据后重新预置（相当于新装）。
+     *
+     * ⚠️ 只认 `{value,label}` 一种格式（用户 2026-11-10：不做任何旧格式兼容）。
+     *    历史数据早已由 `tools/migrate_quick_nav.py` 一次性迁成新格式，
+     *    这里不再追加/改写旧条目，也不再读写 `dest` / `uri` / `name` 字段。
      */
     var quickNavList: String
         get() {
             val raw = sp.getString(KEY_QUICK_NAV_LIST, null)
             // 全新安装：直接就是预置的那一个
             if (raw == null) {
-                // ⭐ 用与现有数据一致的 {value,label} 格式：
-                //    value=完整链接（adapter 认 "://" 判定为直达链接），label=按钮显示名
+                // value=完整链接（adapter 认 "://" 判定为直达链接），label=按钮显示名
                 val preset = """[{"value":"$COORD_PICKER_URL","label":"$QUICK_NAV_COORD_NAME"}]"""
-                sp.edit {
-                    putString(KEY_QUICK_NAV_LIST, preset)
-                    putBoolean(KEY_QUICK_NAV_PREFILLED, true)
-                }
+                sp.edit { putString(KEY_QUICK_NAV_LIST, preset) }
                 return preset
-            }
-            // 老用户升级：列表里还没有「坐标获取」就**追加**一个
-            if (!sp.getBoolean(KEY_QUICK_NAV_PREFILLED, false)) {
-                // ⚠️⚠️ **绝不解析后整体重写**：用户已有的条目字段形态各异
-                //    （value/label、dest/label/uri、name/uri 三代并存），
-                //    往返转换会把 value / label 写颠倒 —— 这里只在原 JSON
-                //    **末尾追加一个元素**，其它元素一个字节都不动。
-                val arr = try { org.json.JSONArray(raw) } catch (e: Exception) { org.json.JSONArray() }
-                val exists = (0 until arr.length()).any { i ->
-                    val o = arr.optJSONObject(i) ?: return@any false
-                    o.optString("label") == QUICK_NAV_COORD_NAME ||
-                        o.optString("name") == QUICK_NAV_COORD_NAME
-                }
-                if (!exists) {
-                    arr.put(
-                        org.json.JSONObject().apply {
-                            put("value", COORD_PICKER_URL)
-                            put("label", QUICK_NAV_COORD_NAME)
-                        }
-                    )
-                }
-                sp.edit {
-                    putString(KEY_QUICK_NAV_LIST, arr.toString())
-                    putBoolean(KEY_QUICK_NAV_PREFILLED, true)
-                }
-                return arr.toString()
             }
             return raw
         }
         set(value) = sp.edit { putString(KEY_QUICK_NAV_LIST, value) }
-
-    /**
-     * 快捷导航列表 → (label, value) 列表。
-     * 兼容三代数据：{value,label}（当前）/ {dest,label,uri} / {name,uri}
-     */
-    private fun parseQuickNav(raw: String): List<Pair<String, String>> = try {
-        val arr = org.json.JSONArray(raw)
-        (0 until arr.length()).mapNotNull { i ->
-            val o = arr.optJSONObject(i) ?: return@mapNotNull null
-            val value = o.optString("value", "")
-            val uri = o.optString("uri", "")
-            val dest = o.optString("dest", o.optString("name"))
-            val label = o.optString("label", "")
-            val v = when {
-                value.isNotBlank() -> value
-                uri.isNotBlank() && uri.contains("://") -> uri
-                dest.isNotBlank() -> dest
-                else -> uri
-            }
-            if (v.isBlank()) null else label to v
-        }
-    } catch (e: Exception) {
-        emptyList()
-    }
-
-    /** (label, value) 列表 → JSON 字符串（与现有 {value,label} 格式一致） */
-    private fun dumpQuickNav(list: List<Pair<String, String>>): String {
-        val arr = org.json.JSONArray()
-        list.forEach { (label, value) ->
-            arr.put(
-                org.json.JSONObject().apply {
-                    put("value", value)
-                    put("label", label)
-                }
-            )
-        }
-        return arr.toString()
-    }
 
     /** 各项目字号档位：0=小 1=中 2=大 */
     var overlaySizeTpms: Int
@@ -465,6 +429,8 @@ class AppPrefs(context: Context) {
         private const val KEY_REALTIME_CURVE_SHOW = "realtime_curve_show"
         private const val KEY_DIFF_RECORD_THRESHOLD = "diff_record_threshold_mv"
         private const val KEY_TOP_SPEED_RECORD_THRESHOLD = "top_speed_record_threshold_kmh"
+        private const val KEY_CURRENT_RECORD_THRESHOLD = "current_record_threshold_a"
+        private const val KEY_POWER_RECORD_THRESHOLD = "power_record_threshold_w"
         private const val KEY_LAST_MAC = "last_device_mac"
         private const val KEY_LAST_NAME = "last_device_name"
         private const val KEY_AUTO_CONNECT = "auto_connect_enabled"
@@ -494,7 +460,6 @@ class AppPrefs(context: Context) {
         private const val KEY_OVERLAY_BG_ALPHA = "overlay_bg_alpha"
         private const val KEY_OVERLAY_ORDER = "overlay_order"
         private const val KEY_NAV_APP_PKG = "nav_app_pkg"
-        private const val KEY_QUICK_NAV_LIST = "quick_nav_list"
 
         /** 高德地图坐标拾取工具（快捷导航预置项的链接） */
         const val COORD_PICKER_URL = "https://lbs.amap.com/tools/picker"
@@ -502,8 +467,8 @@ class AppPrefs(context: Context) {
         /** 预置按钮的名字 */
         const val QUICK_NAV_COORD_NAME = "坐标获取"
 
-        /** 「已经预置过」的标记 —— 用户删掉后不会再自动加回来 */
-        private const val KEY_QUICK_NAV_PREFILLED = "quick_nav_prefilled"
+        /** 快捷导航列表的 SP key（只存 `{value,label}` 一种格式） */
+        private const val KEY_QUICK_NAV_LIST = "quick_nav_list"
         private const val KEY_OVERLAY_SIZE_TPMS = "overlay_size_tpms"
         private const val KEY_OVERLAY_SIZE_VOLTS = "overlay_size_volts"
         private const val KEY_OVERLAY_SIZE_AMPS = "overlay_size_amps"

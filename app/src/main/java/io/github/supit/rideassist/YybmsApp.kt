@@ -68,6 +68,20 @@ class YybmsApp : Application() {
         io.github.supit.rideassist.data.prefs.TopSpeedHistoryPrefs(this)
     }
 
+    /** ⭐ 电流历史的独立落盘（文件 `current_history`） */
+    val currentHistoryCache: io.github.supit.rideassist.data.prefs.MetricHistoryPrefs by lazy {
+        io.github.supit.rideassist.data.prefs.MetricHistoryPrefs(
+            this, io.github.supit.rideassist.data.prefs.MetricHistoryPrefs.FILE_CURRENT,
+        )
+    }
+
+    /** ⭐ 功率历史的独立落盘（文件 `power_history`） */
+    val powerHistoryCache: io.github.supit.rideassist.data.prefs.MetricHistoryPrefs by lazy {
+        io.github.supit.rideassist.data.prefs.MetricHistoryPrefs(
+            this, io.github.supit.rideassist.data.prefs.MetricHistoryPrefs.FILE_POWER,
+        )
+    }
+
     /**
      * ⭐⭐⭐ 会话记录器 —— **应用级单例**（原为 Activity 作用域 ViewModel）。
      *
@@ -79,10 +93,11 @@ class YybmsApp : Application() {
      * 语义仍然等价于「本次会话」：退出 APP 进程即重置，
      * 且**不做跨进程恢复** —— 退出 APP 即全新会话（2026-10-20 用户要求）。
      *
-     * ⚠️ **唯一例外**：聚焦压差卡下面的「最大压差单体历史」与聚焦速度卡下面的
-     *    「极速记录」。用户 2026-11-09 / 2026-11-10 明确要求它们
+     * ⚠️ **唯一例外**：聚焦各卡下面的四份「记录」历史（最大压差单体 / 极速 /
+     *    电流 / 功率）。用户 2026-11-09 / 2026-11-10 明确要求它们
      *    「一直能显示、重开 APP 不能不见」，所以创建单例时先从
-     *    [diffHistoryCache] / [topSpeedHistoryCache] 恢复，再挂上写回回调。
+     *    [diffHistoryCache] / [topSpeedHistoryCache] / [currentHistoryCache] /
+     *    [powerHistoryCache] 恢复，再挂上写回回调。
      *    其余曲线 / 峰值 / 统计仍是纯内存，不受影响。
      *
      * ⭐ 两项「记录阈值」（压差 mV / 极速 Km/h）也在这里注入：
@@ -94,12 +109,18 @@ class YybmsApp : Application() {
             // ⚠️ 顺序不能反：先恢复，再挂写回回调；否则恢复动作会被当成一次新变更写回去
             tracker.restoreDiffHistory(diffHistoryCache.raw)
             tracker.restoreTopSpeedHistory(topSpeedHistoryCache.raw)
+            tracker.restoreCurrentHistory(currentHistoryCache.raw)
+            tracker.restorePowerHistory(powerHistoryCache.raw)
             tracker.diffHistorySink = { raw -> diffHistoryCache.raw = raw }
             tracker.topSpeedHistorySink = { raw -> topSpeedHistoryCache.raw = raw }
+            tracker.currentHistorySink = { raw -> currentHistoryCache.raw = raw }
+            tracker.powerHistorySink = { raw -> powerHistoryCache.raw = raw }
             tracker.thresholdsProvider = {
                 io.github.supit.rideassist.ui.realtime.SessionSpeedTracker.RecordThresholds(
                     diffMv = prefs.diffRecordThresholdMv,
                     topSpeedKmh = prefs.topSpeedRecordThresholdKmh,
+                    currentA = prefs.currentRecordThresholdA,
+                    powerW = prefs.powerRecordThresholdW,
                 )
             }
         }

@@ -58,4 +58,15 @@ class RecordThresholdTest {
         assertEquals("50", RecordThreshold.label(Float.NaN))
         assertEquals("50", RecordThreshold.label(-3f))
     }
+
+    @Test
+    fun `功率项用 1000 作为默认值 不受 50 影响`() {
+        assertEquals(1000f, RecordThreshold.parse("", RecordThreshold.DEFAULT_POWER), 0f)
+        assertEquals(1000f, RecordThreshold.parse("abc", RecordThreshold.DEFAULT_POWER), 0f)
+        assertEquals(1000f, RecordThreshold.parse("-5", RecordThreshold.DEFAULT_POWER), 0f)
+        assertEquals(1200f, RecordThreshold.parse("1200", RecordThreshold.DEFAULT_POWER), 0f)
+        assertEquals("1000", RecordThreshold.label(Float.NaN, RecordThreshold.DEFAULT_POWER))
+        // 传了 default 就不会退回到 50
+        assertEquals("1000", RecordThreshold.label(-1f, RecordThreshold.DEFAULT_POWER))
+    }
 }

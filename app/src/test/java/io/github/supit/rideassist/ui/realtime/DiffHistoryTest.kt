@@ -26,10 +26,11 @@ import org.junit.Test
  */
 class DiffHistoryTest {
 
-    private fun frame(lowest: Float) = BmsRealtimeData(
+    private fun frame(lowest: Float, current: Float = 80f) = BmsRealtimeData(
         hasDeviceData = true,
         cellCount = 3,
         cellVoltages = listOf(4.000f, 4.001f, lowest),
+        totalCurrent = current,
     )
 
     /** 可注入的墙钟，便于模拟跨行程 */
@@ -107,6 +108,8 @@ class DiffHistoryTest {
         assertEquals(90f, rows[0].diffMv, 0.0001f)
         assertEquals(3.850f, rows[0].cellVolt, 0.0001f)
         assertEquals(3, rows[0].cellIndex)
+        // ⭐ 2026-11-10：记录里带上「当时的电流」（用户要求显示在行里）
+        assertEquals(80f, rows[0].currentA, 0.0001f)
         // 日期 MM-dd（5 字符，如 11-09）
         assertEquals(5, rows[0].date.length)
         assertTrue(rows[0].date[2] == '-')
@@ -244,11 +247,20 @@ class DiffHistoryTest {
         t.restoreDiffHistory("garbage\n1|2|3\n\n5|80.0|11-09|3|3.9|150.0|extra")
         assertTrue(t.diffHistory.isEmpty())
 
+        // ⚠️ 严格 7 字段（2026-11-10 起带电流），旧 6 字段行按坏行跳过
         val many = (1..15).joinToString("\n") { i ->
-            "$i|60.0|11-09|3|3.900|150.0"
+            "$i|60.0|11-09|3|3.900|150.0|80.0"
         }
         t.restoreDiffHistory(many)
         assertEquals(SessionSpeedTracker.MAX_DIFF_HISTORY, t.diffHistory.size)
         assertEquals(15L, t.diffHistory[0].tripId)
+        assertEquals(80f, t.diffHistory[0].currentA, 0.0001f)
+    }
+
+    @Test
+    fun `六字段旧行不再兼容 直接当坏行跳过`() {
+        val t = SessionSpeedTracker()
+        t.restoreDiffHistory("3|60.0|11-09|3|3.900|150.0")
+        assertTrue(t.diffHistory.isEmpty())
     }
 }
