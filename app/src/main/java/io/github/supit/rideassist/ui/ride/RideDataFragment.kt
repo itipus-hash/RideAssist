@@ -51,7 +51,7 @@ class RideDataFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // ⭐ 清空本次会话（从信息面板挪到数据页最底部，用户 2026-11-09）
+        // ⭐ 清空骑行数据（从信息面板挪到数据页最底部，用户 2026-11-09）
         binding.btnResetSession.setOnClickListener {
             android.app.AlertDialog.Builder(requireContext())
                 .setTitle(R.string.diag_reset_title)
@@ -64,8 +64,7 @@ class RideDataFragment : Fragment() {
                     tracker.resetSession()
                     Toast.makeText(
                         requireContext(),
-                        getString(R.string.diag_reset_done) +
-                            getString(R.string.diag_reset_done_extra),
+                        getString(R.string.diag_reset_done),
                         Toast.LENGTH_SHORT
                     ).show()
                     // 立即重绘：峰值 / 时长 / 平均值都要归零

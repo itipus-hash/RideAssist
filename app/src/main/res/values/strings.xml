@@ -467,11 +467,10 @@
     <string name="tpms_info_temp_press_fmt">温度 %1$d℃ · 胎压 %2$.2fbar</string>
     <string name="tpms_battery_normal">电量正常</string>
     <string name="tpms_battery_low">电量不足</string>
-    <string name="diag_reset">清空本次会话</string>
-    <string name="diag_reset_title">清空本次会话</string>
-    <string name="diag_reset_msg">将清空里程、耗能、回收、骑行时长、本次峰值与全部曲线采样；压差 / 极速 / 电流 / 功率的最大记录不受影响（需长按对应记录卡清除）。此操作不可撤销。</string>
+    <string name="diag_reset">清空骑行数据</string>
+    <string name="diag_reset_title">清空骑行数据</string>
+    <string name="diag_reset_msg">将清空里程、耗能、回收、骑行时长、本次峰值与全部曲线采样。</string>
     <string name="diag_reset_done">已清空</string>
-    <string name="diag_reset_done_extra">（最大记录保留）</string>
     <string name="diag_no_device">未连接设备，暂无实时数据。</string>
 
     <!-- 数据页：电池健康（派生指标） -->
