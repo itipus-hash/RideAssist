@@ -42,7 +42,7 @@
         android:layout_height="match_parent">
 
         <!-- ⚠️ 页面 padding 8dp（原 12dp）+ 卡片 contentPadding 12dp（原 16dp）：
-             省出来的 16dp 全部给控件列，否则「最大压差记录阈值（mV）」这种长标题
+             省出来的 16dp 全部给控件列，否则「压差记录阈值（mV）」这种长标题
              会被挤到换行。 -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -170,7 +170,7 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- ========== 第三项：最大压差记录阈值（mV） ========== -->
+                    <!-- ========== 第三项：压差记录阈值（mV） ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -197,7 +197,7 @@
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- ========== 第四项：极速记录阈值（Km/h） ========== -->
+                    <!-- ========== 第四项：速度记录阈值（Km/h） ========== -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

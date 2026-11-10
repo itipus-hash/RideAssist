@@ -1430,7 +1430,7 @@ class SessionSpeedTracker : ViewModel() {
          * 阈值只作用于**历史卡**，峰值记录卡仍照常显示小压差，不改变旧行为。
          *
          * ⚠️ 2026-11-10 起这是**默认值**：实际阈值由连接设置页的
-         *    「最大压差记录阈值（mV）」决定，经 [thresholdsProvider] 实时读取；
+         *    「压差记录阈值（mV）」决定，经 [thresholdsProvider] 实时读取；
          *    仅在未注入 provider（纯 JVM 单测）时作为兜底。
          */
         const val MIN_DIFF_HISTORY_MV = 50f
@@ -1445,7 +1445,7 @@ class SessionSpeedTracker : ViewModel() {
          * ⭐ **极速历史的最小速度（Km/h）**：没超过 50Km/h 不记录。
          *
          * 与 [MIN_DIFF_HISTORY_MV] 一样只是**默认值**，实际由连接设置页的
-         * 「极速记录阈值（Km/h）」决定，经 [thresholdsProvider] 实时读取。
+         * 「速度记录阈值（Km/h）」决定，经 [thresholdsProvider] 实时读取。
          */
         const val MIN_TOP_SPEED_HISTORY_KMH = 50f
 

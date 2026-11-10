@@ -65,8 +65,8 @@
     <!-- ⭐ 连接设置页第三、四项（用户 2026-11-10）：两项记录阈值。
          同样一行文字 + 右侧数字输入框，不写任何说明 / 提示。
          留空 / 非法值由 RecordThreshold 统一回填 50。 -->
-    <string name="setting_diff_threshold_title">最大压差记录阈值（mV）</string>
-    <string name="setting_top_speed_threshold_title">极速记录阈值（Km/h）</string>
+    <string name="setting_diff_threshold_title">压差记录阈值（mV）</string>
+    <string name="setting_top_speed_threshold_title">速度记录阈值（Km/h）</string>
     <string name="setting_current_threshold_title">电流记录阈值（A）</string>
     <string name="setting_power_threshold_title">功率记录阈值（W）</string>
 
