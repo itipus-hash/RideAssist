@@ -14,6 +14,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
+import io.github.supit.rideassist.R
 
 /**
  * ⭐ **统一的轻提示**（用户 2026-11-10）。
@@ -66,8 +67,11 @@ object Feedback {
     private const val HOLD_SHORT_MS = 2000L
     private const val HOLD_LONG_MS = 3500L
 
-    /** 距屏幕底部的距离：提示不贴底，浮在底部往上一点 */
-    private const val BOTTOM_OFFSET_DP = 88
+    /** 提示与底部标签页（BottomNavigationView）之间的间距 */
+    private const val BOTTOM_NAV_GAP_DP = 12
+
+    /** 找不到底部标签页时（独立设置页等）的兜底离底距离 */
+    private const val FALLBACK_BOTTOM_DP = 32
 
     /** 当前正在显示的浮层：新的提示来了先把旧的收掉，避免叠成一摞 */
     private var currentDialog: Dialog? = null
@@ -138,6 +142,11 @@ object Feedback {
             setGravity(Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM)
             addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
             addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            // ⚠️ **不要压暗整屏**（用户 2026-11-10：「不要影响整个画面啊，变暗干啥」）：
+            //    Dialog 的默认主题带 FLAG_DIM_BEHIND，会把整个画面调暗。
+            //    这里把 dim 彻底关掉，只有提示自己浮着。
+            clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(0f)
             // 不要系统默认的窗口动画，淡入淡出我们自己演
             setWindowAnimations(0)
         }
@@ -159,7 +168,9 @@ object Feedback {
             val lp = w.attributes
             lp.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
             // y 为负 = 离底边往上抬
-            lp.y = -activity.dp(BOTTOM_OFFSET_DP)
+            // ⭐ 抬到**底部标签页（BottomNavigationView）上方**（用户 2026-11-10：
+            //    「起码得在底部标签页按钮上」），别贴着屏幕底边。
+            lp.y = -bottomInsetPx(activity)
             w.attributes = lp
         }
 
@@ -176,10 +187,24 @@ object Feedback {
         }, holdMs)
     }
 
+    /**
+     * ⭐ 提示浮在**底部标签页按钮上方**（用户 2026-11-10：
+     * 「起码得在底部标签页按钮上」），离底距离 = 底部导航栏高度 + 间距。
+     *
+     * 独立 Activity（连接设置页 / 胎压设置页）没有底部导航栏 → 用兜底值，
+     * 提示贴底一点点，不至于浮在屏幕正中。
+     */
+    private fun bottomInsetPx(activity: Activity): Int {
+        val content = activity.findViewById<View>(android.R.id.content)
+        val nav = content?.findViewById<View>(R.id.bottom_nav)
+        val navHeight = nav?.height ?: 0
+        val base = if (navHeight > 0) navHeight else activity.dp(FALLBACK_BOTTOM_DP)
+        return base + activity.dp(BOTTOM_NAV_GAP_DP)
+    }
+
     /** 圆角 + 半透明底色 */
     private fun roundedBackground(context: Context, cornerDp: Int = CORNER_DP): GradientDrawable =
-        GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
+        GradientDrawable().apply {            shape = GradientDrawable.RECTANGLE
             cornerRadius = context.dp(cornerDp).toFloat()
             setColor(
                 Color.argb(
