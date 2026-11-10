@@ -1,17 +1,15 @@
 package io.github.supit.rideassist.ui.widget
 
 import android.app.Activity
-import android.app.Dialog
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.view.Gravity
 import android.view.View
-import android.view.Window
-import android.view.WindowManager
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import io.github.supit.rideassist.R
@@ -70,11 +68,16 @@ object Feedback {
     /** 提示与底部标签页（BottomNavigationView）之间的间距 */
     private const val BOTTOM_NAV_GAP_DP = 12
 
-    /** 找不到底部标签页时（独立设置页等）的兜底离底距离 */
-    private const val FALLBACK_BOTTOM_DP = 32
+    /**
+     * 找不到底部标签页时（独立设置页等）的兜底离底距离。
+     * 取 96dp ≈ 标准标签页栏高度，保证**任何情况下都不会贴着屏幕底边**。
+     */
+    private const val FALLBACK_BOTTOM_DP = 96
 
-    /** 当前正在显示的浮层：新的提示来了先把旧的收掉，避免叠成一摞 */
-    private var currentDialog: Dialog? = null
+    /** 标记当前正在显示的提示 View（用 tag 找，避免静态持有 View 引用） */
+    private const val TAG_FEEDBACK = "rideassist_feedback"
+
+    /** 当前正在显示的提示（用 tag 找，不静态持有 View，避免泄漏 Activity） */
 
     /**
      * 显示一条居中轻提示。
@@ -108,11 +111,22 @@ object Feedback {
     // ==================== 内部实现 ====================
 
     private fun showCentered(activity: Activity, text: CharSequence, holdMs: Long) {
-        // 上一个还没消失就先收掉，避免提示叠成一摞
-        currentDialog?.dismiss()
+        // ⚠️ **不要用 Dialog 浮层**：浮动窗口会被系统栏区域裁剪，
+        //    gravity + y 的偏移量算不准（实测提示还是贴着底）。
+        //    改成直接把 View 加到 Activity 的 content 容器里 ——
+        //    位置由布局系统保证：bottomMargin = 底部导航栏高度 + 间距，
+        //    稳稳落在**底部标签页按钮上方**。
+        val root = activity.findViewById<FrameLayout>(android.R.id.content) ?: run {
+            Toast.makeText(activity, text, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 上一条还没消失就先收掉，避免叠成一摞（用 tag 找，不持有静态 View 引用）
+        root.findViewWithTag<View>(TAG_FEEDBACK)?.let { root.removeView(it) }
 
         val tv = TextView(activity).apply {
             this.text = text
+            tag = TAG_FEEDBACK
             setTextColor(Color.WHITE)
             textSize = TEXT_SP
             gravity = Gravity.CENTER
@@ -121,68 +135,29 @@ object Feedback {
                 activity.dp(PAD_H_DP), activity.dp(PAD_V_DP),
             )
             background = roundedBackground(activity)
-            // ⚠️ 淡入从 0 开始；出淡出结束后才 dismiss，否则会「闪一下再消失」
+            // ⚠️ 淡入从 0 开始；出淡出结束后才移除，否则会「闪一下再消失」
             alpha = 0f
         }
 
-        val dialog = Dialog(activity)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.setContentView(tv)
-        dialog.setCanceledOnTouchOutside(false)
-        // ⚠️ 不吃触摸、不抢焦点：提示只是提示，不能挡住下面的操作
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            setLayout(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-            )
-            // ⭐ **水平居中 + 垂直靠底**（用户 2026-11-10 纠正：
-            //    「水平居中，不是让你垂直居中」）。
-            //    垂直居中会把提示怼在屏幕正中，挡住正在看的内容，很丑。
-            setGravity(Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM)
-            addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
-            addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-            // ⚠️ **不要压暗整屏**（用户 2026-11-10：「不要影响整个画面啊，变暗干啥」）：
-            //    Dialog 的默认主题带 FLAG_DIM_BEHIND，会把整个画面调暗。
-            //    这里把 dim 彻底关掉，只有提示自己浮着。
-            clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(0f)
-            // 不要系统默认的窗口动画，淡入淡出我们自己演
-            setWindowAnimations(0)
-        }
-
-        dialog.setOnDismissListener {
-            if (currentDialog === dialog) currentDialog = null
-        }
-
-        try {
-            dialog.show()
-        } catch (_: Exception) {
-            // Activity 正在销毁时 show 会抛 WindowManager$BadTokenException
-            return
-        }
-        currentDialog = dialog
-
-        // ⚠️ show() 之后 window 才 attach，此时改 gravity / y 偏移才真正生效
-        dialog.window?.let { w ->
-            val lp = w.attributes
-            lp.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-            // y 为负 = 离底边往上抬
-            // ⭐ 抬到**底部标签页（BottomNavigationView）上方**（用户 2026-11-10：
-            //    「起码得在底部标签页按钮上」），别贴着屏幕底边。
-            lp.y = -bottomInsetPx(activity)
-            w.attributes = lp
-        }
+        val lp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
+        )
+        // ⭐ 抬到**底部标签页（BottomNavigationView）上方**（用户 2026-11-10：
+        //    「起码得在底部标签页按钮上」），别贴着屏幕底边。
+        lp.bottomMargin = bottomInsetPx(activity)
+        root.addView(tv, lp)
 
         // ⭐ 淡入
         tv.animate().alpha(1f).setDuration(FADE_IN_MS).start()
-        // ⭐ 停留 → 淡出 → 销毁
+        // ⭐ 停留 → 淡出 → 移除
         tv.postDelayed({
-            if (!dialog.isShowing) return@postDelayed
+            if (tv.parent == null) return@postDelayed
             tv.animate()
                 .alpha(0f)
                 .setDuration(FADE_OUT_MS)
-                .withEndAction { if (dialog.isShowing) dialog.dismiss() }
+                .withEndAction { if (tv.parent != null) (tv.parent as? ViewGroup)?.removeView(tv) }
                 .start()
         }, holdMs)
     }
