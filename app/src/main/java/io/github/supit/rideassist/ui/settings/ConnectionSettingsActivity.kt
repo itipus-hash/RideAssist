@@ -22,9 +22,10 @@ import io.github.supit.rideassist.util.TpmsDisplayMode
  * 也会让两处设置互相挤占版面。
  *
  * 目前七项，风格一致（文字在左、控件直接在右、无说明文案）：
- * 1. **连接后跳转** —— 连上保护板后切到哪个标签页，默认「首页」；
- * 2. **实时曲线默认**（2026-11-09 新增）—— 进入实时页时曲线默认
- *    「显示曲线」还是「不显示曲线」，默认后者（保持旧体验）；
+ * 1. **连接BMS后自动跳转**（2026-11-11 改名）—— 连上保护板后是否切页、切到哪：
+ *    「不跳转」/「实时·页面」/「数据·页面」/「导航·页面」，默认「不跳转」；
+ * 2. **实时界面曲线显示**（2026-11-11 改名）—— 进入实时页时曲线「默认显示」
+ *    还是「默认不显示」，默认后者（保持旧体验）；
  * 3. **最大压差记录阈值（mV）**（2026-11-10 新增）—— 聚焦压差卡的历史卡
  *    只记录压差严格大于该值的行程，默认 50；
  * 4. **极速记录阈值（Km/h）**（2026-11-10 新增）—— 聚焦速度卡的历史卡
@@ -94,14 +95,17 @@ class ConnectionSettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * ⚠️ `keys` 顺序必须与 `R.array.connect_jump_tab_labels` 完全一致。
+     * ⭐ **连接BMS后自动跳转**（用户 2026-11-11 改名 + 改选项）。
+     *
+     * 选项（顺序必须与 `R.array.connect_jump_tab_labels` 完全一致）：
+     * 0 = 不跳转（[AppPrefs.TAB_NONE]）、1 = 实时·页面、2 = 数据·页面、3 = 导航·页面。
      *
      * ⚠️ Spinner 首次 layout 会自动回调一次 onItemSelected，用「值没变就不写」
      *    挡住这次回调，避免把默认值误写进 SP 或覆盖掉用户已保存的选择。
      */
     private fun setupConnectJumpTab() {
         val keys = listOf(
-            AppPrefs.TAB_HOME,
+            AppPrefs.TAB_NONE,
             AppPrefs.TAB_REALTIME,
             AppPrefs.TAB_DATA,
             AppPrefs.TAB_OVERLAY,
@@ -113,7 +117,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
             override fun onItemSelected(
                 parent: AdapterView<*>, view: View?, position: Int, id: Long,
             ) {
-                val key = keys.getOrElse(position) { AppPrefs.TAB_HOME }
+                val key = keys.getOrElse(position) { AppPrefs.TAB_NONE }
                 if (prefs.connectJumpTab != key) prefs.connectJumpTab = key
             }
 
@@ -122,12 +126,13 @@ class ConnectionSettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * ⭐ **实时曲线默认**（用户 2026-11-09）：决定进入实时页时曲线是
-     * 「显示曲线」（LIVE）还是「不显示曲线」（OFF），由实时页在切入时
-     * 读取本偏好复位初始状态。
+     * ⭐ **实时界面曲线显示**（用户 2026-11-09 新增 / 2026-11-11 改名）。
      *
-     * ⚠️ `R.array.curve_default_labels` 顺序：0 = 显示曲线（true），
-     *    1 = 不显示曲线（false）。默认选 1，保持 2026-11-08「打开 APP
+     * 决定进入实时页时曲线是「默认显示」（LIVE）还是「默认不显示」（OFF），
+     * 由实时页在切入时读取本偏好复位初始状态。
+     *
+     * ⚠️ `R.array.curve_default_labels` 顺序：0 = 默认显示（true），
+     *    1 = 默认不显示（false）。默认选 1，保持 2026-11-08「打开 APP
      *    默认不显示曲线」的既有体验。
      *
      * ⚠️ 与 [setupConnectJumpTab] 同理，用「值没变就不写」挡住 Spinner

@@ -222,11 +222,11 @@ class RealtimeFragment : Fragment(), LocationListener {
      */
     private var curveMode: CurveMode = CurveMode.OFF
 
-    /** ⭐ Application 级偏好（连接设置页里的「实时曲线默认」等） */
+    /** ⭐ Application 级偏好（连接设置页里的「实时界面曲线显示」等） */
     private val appPrefs get() = YybmsAppHolder.from(requireContext()).prefs
 
     /**
-     * 上次按「实时曲线默认」复位时用过的偏好值；`null` = 本 Fragment 尚未复位过。
+     * 上次按「实时界面曲线显示」复位时用过的偏好值；`null` = 本 Fragment 尚未复位过。
      *
      * 用来区分「用户刚改了设置」与「用户只是切出去又回来」：偏好没变时，
      * 不打断用户在本页双击选中的曲线模式；只有真正**切入实时页**
@@ -525,7 +525,7 @@ class RealtimeFragment : Fragment(), LocationListener {
     }
 
     /**
-     * ⭐ **按连接设置页的「实时曲线默认」复位进入实时页时的曲线状态**
+     * ⭐ **按连接设置页的「实时界面曲线显示」复位进入实时页时的曲线状态**
      * （用户 2026-11-09）。
      *
      * 偏好 `true` → [CurveMode.LIVE]（显示曲线）；`false`（默认）→ [CurveMode.OFF]。
@@ -873,7 +873,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         // ⚠️ 2026-11-09 唯一例外：聚焦压差卡下面的「最大压差单体历史」按用户要求
         //    单独落盘，跨 APP 重启保留（由 YybmsApp 恢复，本页照常读 tracker 渲染）。
         super.onViewCreated(view, savedInstanceState)
-        // ⭐ 首次进入实时页：按连接设置页的「实时曲线默认」定初始显隐
+        // ⭐ 首次进入实时页：按连接设置页的「实时界面曲线显示」定初始显隐
         //    （默认 false = 不显示曲线，保持旧体验）
         syncCurveModeOnEnter(force = true)
         // 回填会话记录（Fragment重建 / 断连 / 切页回来后仍保留）
@@ -1001,7 +1001,7 @@ class RealtimeFragment : Fragment(), LocationListener {
         super.onHiddenChanged(hidden)
         if (!hidden && _binding != null) {
             // ⭐ 真正「切入实时页」（MainActivity 是 show/hide，不重建 Fragment）：
-            //    无条件按「实时曲线默认」复位初始显隐
+            //    无条件按「实时界面曲线显示」复位初始显隐
             syncCurveModeOnEnter(force = true)
             // 切回本页：恢复 GPS 订阅与时钟，但**不清空**任何历史数据
             if (hasLocationPermission()) startGpsUpdates()

@@ -195,23 +195,32 @@ class AppPrefs(context: Context) {
     // ==================== 连接后的自动跳转 ====================
 
     /**
-     * ⭐ **连接保护板后切到哪个标签页**（用户 2026-11-09 / 同日简化）。
+     * ⭐ **连接 BMS 后自动跳到哪个页面**（用户 2026-11-09 新增 / 2026-11-11 改名改选项）。
      *
-     * 默认 [TAB_HOME]（主页）。选项只有 4 个底部标签页 ——
-     * 「首页」本身就等于不跳转，所以不再单列「不跳转」。
+     * 选项（2026-11-11 按用户要求）：
+     * - [TAB_NONE]「不跳转」 —— 连上后**完全不动**，停在当前页；
+     * - [TAB_REALTIME]「实时·页面」
+     * - [TAB_DATA]「数据·页面」
+     * - [TAB_OVERLAY]「导航·页面」
+     *
      * 只在「未连接 → 已连接」的上升沿生效一次，回前台 / 页面重建不会重复跳。
      *
-     * ⚠️ 读写都做白名单归一：v1.0.36 曾写入过 `"none"`（旧「不跳转」），
-     *    老用户升级后这个遗留值必须按「首页」处理，不能让下拉框落空、
-     *    也不能把它当成未知值悄悄关掉跳转。
+     * ⚠️ **格式迁移（一次性，读旧 → 转新 → 立刻存新）**：
+     *    ≤ v1.0.48 的第一项是「首页」，存储值 `"home"`；v1.0.49 起第一项改成
+     *    「不跳转」，存储值 `"none"`。老用户升级后读到 `"home"` 会被转成
+     *    [TAB_NONE] 并**立刻写回 SP**，SP 里从此只有最新格式。
+     *    （本项目约定：不做长期旧格式兼容，只在读取时转换一次并立刻存新。）
      */
     var connectJumpTab: String
         get() {
-            val saved = sp.getString(KEY_CONNECT_JUMP_TAB, TAB_HOME) ?: TAB_HOME
-            return if (saved in VALID_JUMP_TABS) saved else TAB_HOME
+            val saved = sp.getString(KEY_CONNECT_JUMP_TAB, TAB_NONE) ?: TAB_NONE
+            if (saved in VALID_JUMP_TABS) return saved
+            // ⚠️ 旧格式（≤ v1.0.48 的 "home"）→ 新格式（"none"），并立刻写回
+            sp.edit { putString(KEY_CONNECT_JUMP_TAB, TAB_NONE) }
+            return TAB_NONE
         }
         set(value) = sp.edit {
-            putString(KEY_CONNECT_JUMP_TAB, if (value in VALID_JUMP_TABS) value else TAB_HOME)
+            putString(KEY_CONNECT_JUMP_TAB, if (value in VALID_JUMP_TABS) value else TAB_NONE)
         }
 
     // ==================== 实时曲线默认显示 ====================
@@ -441,14 +450,19 @@ class AppPrefs(context: Context) {
     }
 
     companion object {
-        // 连接后跳转的目标标签页（与底部导航四个 id 一一对应）
-        const val TAB_HOME = "home"
+        // 连接后跳转的目标（与底部导航标签页一一对应）
+        /** ⭐ 「不跳转」：连上 BMS 后完全不动，停在当前页（用户 2026-11-11） */
+        const val TAB_NONE = "none"
         const val TAB_REALTIME = "realtime"
         const val TAB_DATA = "data"
         const val TAB_OVERLAY = "overlay"
 
-        /** 合法值白名单；v1.0.36 的遗留值 "none"（旧「不跳转」）会被归一成首页 */
-        private val VALID_JUMP_TABS = setOf(TAB_HOME, TAB_REALTIME, TAB_DATA, TAB_OVERLAY)
+        /**
+         * 合法值白名单。
+         * ⚠️ 不含旧的 `"home"`（≤ v1.0.48 的「首页」）：它在 [connectJumpTab]
+         *    读取时会被转成 [TAB_NONE] 并立刻写回，SP 里不保留旧值。
+         */
+        private val VALID_JUMP_TABS = setOf(TAB_NONE, TAB_REALTIME, TAB_DATA, TAB_OVERLAY)
 
         private const val KEY_CONNECT_JUMP_TAB = "connect_jump_tab"
         private const val KEY_REALTIME_CURVE_SHOW = "realtime_curve_show"

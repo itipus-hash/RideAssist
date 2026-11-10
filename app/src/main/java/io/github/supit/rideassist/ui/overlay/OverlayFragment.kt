@@ -131,9 +131,17 @@ class OverlayFragment : Fragment() {
             prefs.overlayJumpOnNav = checked
         }
 
-        // ⭐ 悬浮项目默认**展开**（用户要求「不要隐藏」），点击表头仍可收起
-        b.recyclerOverlayItems.visibility = View.VISIBLE
-        b.tvArrow.text = "▾"
+        // ⭐ 悬浮项目**每次重新打开 APP 都默认折叠**（用户 2026-11-11：
+        //    「每次重新打开软件，都默认折叠导航标签页里 悬浮项目的菜单」）。
+        //
+        //    实现口径：**只在 View 创建时置为折叠，不落盘**。
+        //    - 冷启动 → 本 Fragment 首次创建 → 折叠；
+        //    - 同一次运行内切标签页：MainActivity 用 add + hide/show，
+        //      Fragment 与 View 都不重建，用户点开的展开状态**保持**；
+        //    - 不写进 SharedPreferences，所以下次重开 APP 又是折叠态。
+        //    之前是默认展开（旧要求「不要隐藏」），本次按新要求反转。
+        b.recyclerOverlayItems.visibility = View.GONE
+        b.tvArrow.text = "▸"
         b.headerItems.setOnClickListener {
             val show = b.recyclerOverlayItems.visibility == View.GONE
             b.recyclerOverlayItems.visibility = if (show) View.VISIBLE else View.GONE

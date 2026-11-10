@@ -14,7 +14,7 @@ import io.github.supit.rideassist.ui.widget.Feedback
 
 /**
  * ⭐ 胎压设置页（2026-10-20 重构 / 2026-11-09 再次拆分）：
- * 连接设置与 BMS 报警开关已移入**信息面板**；连接卡齿轮的「连接后跳转」
+ * 连接设置与 BMS 报警开关已移入**信息面板**；连接卡齿轮的「连接BMS后自动跳转」
  * 拆到独立的 [ConnectionSettingsActivity]（用户要求两处设置不共享界面）。
  * 本页只保留：
  * - 胎压告警阈值（低压/高压/高温）

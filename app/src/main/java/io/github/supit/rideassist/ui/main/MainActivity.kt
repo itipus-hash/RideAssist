@@ -154,22 +154,22 @@ class MainActivity : AppCompatActivity() {
 
 
     /**
-     * ⭐ **连接保护板后按设置切换标签页**（用户 2026-11-09）。
+     * ⭐ **连接 BMS 后按设置自动切换页面**（用户 2026-11-09 新增 / 2026-11-11 改选项）。
      *
-     * @param tab [AppPrefs.connectJumpTab] 的值；未知值按首页处理。
+     * @param tab [AppPrefs.connectJumpTab] 的值；未知值按「不跳转」处理。
      *
-     * - 默认 `TAB_HOME`：冷启动时本来就在首页 → [currentTag] 已相同，直接返回，
-     *   不产生无谓的 Fragment 事务，也不会把用户从详情页硬拽回来。
-     *   「首页」本身就是用户说的「不跳转」，下拉里不再单列该项。
-     * - 目标页与当前页不同才跳；顺手恢复底部导航（详情页会隐藏它）。
+     * - [AppPrefs.TAB_NONE]「不跳转」：连上后**完全不动**，停在当前页 ——
+     *   直接返回，不碰底部导航、不发 Fragment 事务。
+     * - 其余「实时·页面 / 数据·页面 / 导航·页面」：目标页与当前页不同才跳；
+     *   顺手恢复底部导航（详情页会隐藏它）。
      */
     fun autoJumpOnConnected(tab: String) {
         val (itemId, tag) = when (tab) {
-            AppPrefs.TAB_HOME -> R.id.nav_home to TAG_MONITOR
             AppPrefs.TAB_REALTIME -> R.id.nav_realtime to TAG_REALTIME
             AppPrefs.TAB_DATA -> R.id.nav_data to TAG_RIDE_DATA
             AppPrefs.TAB_OVERLAY -> R.id.nav_overlay to TAG_OVERLAY
-            else -> return      // 历史遗留 / 未知值：保持当前页
+            // 「不跳转」/ 未知值：保持当前页，界面不会有任何跳动
+            else -> return
         }
         if (currentTag == tag) return
 
