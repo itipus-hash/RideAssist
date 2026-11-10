@@ -181,6 +181,43 @@
                             android:textColor="@color/primary"
                             tools:text="km/h" />
                     </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    <!-- ⭐ 胎压行（2026-11-10 从功率卡挪到速度卡）。
+                         ⚠️ 用**曲线区顶部悬浮**而不是另起一行：
+                         速度卡高度锁死 156dp，多加一行会把曲线挤出卡外
+                         （功率卡原来就是这么挤的，所以用户要求挪走）。
+                         左 = 前轮，右 = 后轮，与聚焦时间卡两侧口径一致。
+                         ⚠️ 显示策略由「实时卡片胎压显示」设置决定
+                         （始终显示 / 始终不显示 / 胎压异常时显示）。 -->
+                    <LinearLayout
+                        android:id="@+id/row_speed_tpms"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="top"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="2dp">
+
+                        <TextView
+                            android:id="@+id/tv_speed_tpms_front"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="start"
+                            android:includeFontPadding="false"
+                            android:textSize="12sp"
+                            tools:text="前轮 1.34Bar" />
+
+                        <TextView
+                            android:id="@+id/tv_speed_tpms_rear"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:includeFontPadding="false"
+                            android:textSize="12sp"
+                            tools:text="后轮 1.82Bar" />
+                    </LinearLayout>
                 </FrameLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -268,30 +305,7 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                    <!-- ⭐ 功率卡顶部胎压信息（非聚焦可见，聚焦时隐藏——聚焦态胎压在时间卡两侧） -->
-                    <LinearLayout
-                        android:id="@+id/row_power_tpms"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:gravity="end"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/tv_power_tpms_front"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:id="@+id/tv_power_tpms_rear"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="14dp"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                <!-- ⭐ 当前值大字居中悬浮在曲线之上，不额外占用卡片高度 -->
+                    <!-- ⭐ 当前值大字居中悬浮在曲线之上，不额外占用卡片高度 -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="110dp"

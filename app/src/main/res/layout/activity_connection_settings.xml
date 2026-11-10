@@ -16,6 +16,10 @@
   - 电流记录阈值（A），默认 50；
   - 功率记录阈值（W），默认 1000。
   留空或填非法值 → 失焦 / 关闭页面时回填各自默认值（见 RecordThreshold）。
+
+  同日再加第七项（下拉框）：
+  - 实时卡片胎压显示：始终显示 / 始终不显示 / 胎压异常时显示，默认「始终显示」。
+  这一项**不依赖保护板**，所以首页连接卡的齿轮未连接时也会显示。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -212,6 +216,32 @@
                             android:maxLines="1"
                             android:minWidth="72dp"
                             android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- 第七项（2026-11-10）：实时卡片胎压显示。
+                         三个选项：始终显示 / 始终不显示 / 胎压异常时显示。
+                         与前两项一样：一行文字 + 右侧下拉，无任何提示。 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/setting_realtime_tpms_display_title"
+                            android:textSize="14sp" />
+
+                        <Spinner
+                            android:id="@+id/spinner_realtime_tpms_display"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:entries="@array/realtime_tpms_display_labels"
+                            android:minWidth="140dp"
+                            android:spinnerMode="dropdown" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

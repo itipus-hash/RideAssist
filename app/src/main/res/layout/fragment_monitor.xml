@@ -103,19 +103,24 @@
                         android:visibility="gone" />
 
                     <!-- ⭐ 「扫描」并入标题行（用户要求：与连接失败状态同一行，省一行高度）。
-                         连接中/已连接时由 renderEmptyState() 隐藏 -->
+                         连接中/已连接时由 renderEmptyState() 隐藏
+                         ⚠️ marginEnd：齿轮按钮现在**未连接时也显示**，
+                            扫描按钮要往左让一点，别和齿轮贴在一起。 -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_scan"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="4dp"
+                        android:layout_marginEnd="8dp"
                         android:minWidth="0dp"
                         android:text="@string/scan"
                         android:visibility="gone" />
 
-                    <!-- ⭐ 连接成功后的设置入口（齿轮，放在连接卡标题行最右侧）。
-                         只在 CONNECTED 时显示：未连接时这一行要留给「扫描」按钮。
+                    <!-- ⭐ 连接设置入口（齿轮，放在连接卡标题行最右侧）。
+                         ⚠️ 2026-11-10 起**未连接时也显示**（用户要求）：
+                         连接设置里有「实时卡片胎压显示」这类不依赖保护板的选项，
+                         没连上保护板也要能进。
                          图标用自绘矢量齿轮 ic_gear（系统 ic_menu_preferences 是扳手）；
                          点击进**独立的连接设置页**，不是胎压那个设置页。 -->
                     <ImageButton
@@ -127,7 +132,6 @@
                         android:contentDescription="@string/connection_settings"
                         android:scaleType="fitCenter"
                         app:srcCompat="@drawable/ic_gear"
-                        android:visibility="gone"
                         tools:visibility="visible" />
                 </LinearLayout>
 

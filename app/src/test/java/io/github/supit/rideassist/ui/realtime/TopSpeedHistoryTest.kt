@@ -201,6 +201,7 @@ class TopSpeedHistoryTest {
         assertEquals(snapshot, saved)
 
         t.resetSession()
-        assertEquals("", saved)     // 否则重开 APP 旧记录会「复活」
+        // ⭐ 清空会话不再清历史（用户 2026-11-10），落盘也保持原样
+        assertEquals(snapshot, saved)
     }
 }

@@ -1214,10 +1214,12 @@ class MonitorFragment : Fragment() {
         }
         wasConnected = state == ConnectionState.CONNECTED
 
-        // ⭐ 齿轮入口只在「连接成功保护板后」出现（用户 2026-11-09）；
-        //    未连接时这一行要留给「扫描」按钮，不抢位置。
-        binding.btnConnectionSettings.visibility =
-            if (state == ConnectionState.CONNECTED) View.VISIBLE else View.GONE
+        // ⭐ 齿轮入口**始终显示**（用户 2026-11-10）：
+        //    连接设置里有「实时卡片胎压显示」这类不依赖保护板的选项，
+        //    没连上保护板也要能进设置页。
+        //    标题行右侧固定是「扫描 + 齿轮」，未连接时两个都在，
+        //    扫描按钮已用 marginEnd 往左让开一点，不会贴住齿轮。
+        binding.btnConnectionSettings.visibility = View.VISIBLE
 
         // ⭐ 连接成功时按设置自动切换标签页。默认「首页」且已在首页时，
         //    MainActivity.autoJumpOnConnected 会直接返回，界面不会有任何跳动。

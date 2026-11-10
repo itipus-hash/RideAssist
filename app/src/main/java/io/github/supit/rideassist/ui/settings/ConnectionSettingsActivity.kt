@@ -12,6 +12,7 @@ import io.github.supit.rideassist.YybmsAppHolder
 import io.github.supit.rideassist.data.prefs.AppPrefs
 import io.github.supit.rideassist.databinding.ActivityConnectionSettingsBinding
 import io.github.supit.rideassist.util.RecordThreshold
+import io.github.supit.rideassist.util.TpmsDisplayMode
 
 /**
  * ⭐ **独立的「连接设置」页**（用户 2026-11-09）：从首页连接卡的齿轮进入。
@@ -20,7 +21,7 @@ import io.github.supit.rideassist.util.RecordThreshold
  * 连接设置是「连上保护板之后才用得上」的东西，混进胎压页既不好找，
  * 也会让两处设置互相挤占版面。
  *
- * 目前六项，风格一致（文字在左、控件直接在右、无说明文案）：
+ * 目前七项，风格一致（文字在左、控件直接在右、无说明文案）：
  * 1. **连接后跳转** —— 连上保护板后切到哪个标签页，默认「首页」；
  * 2. **实时曲线默认**（2026-11-09 新增）—— 进入实时页时曲线默认
  *    「显示曲线」还是「不显示曲线」，默认后者（保持旧体验）；
@@ -31,11 +32,16 @@ import io.github.supit.rideassist.util.RecordThreshold
  * 5. **电流记录阈值（A）**（2026-11-10 新增）—— 聚焦电流卡的历史卡
  *    只记录电流严格大于该值的行程，默认 50；
  * 6. **功率记录阈值（W）**（2026-11-10 新增）—— 聚焦功率卡的历史卡
- *    只记录功率严格大于该值的行程，默认 **1000**（量级不同，别跟着写 50）。
+ *    只记录功率严格大于该值的行程，默认 **1000**（量级不同，别跟着写 50）；
+ * 7. **实时卡片胎压显示**（2026-11-10 新增）—— 实时页的胎压什么时候显示：
+ *    「始终显示」/「始终不显示」/「胎压异常时显示」，默认「始终显示」。
  *
  * ⚠️ 3~6 四项留空 / 填非法值（负数、NaN、非数字）一律按各自的
  *    [RecordThreshold] 默认值处理：失焦、按键盘「完成」、退出页面三个时机
  *    都会把输入框回填成实际生效值，用户不会看到「空着但其实是默认值」的困惑状态。
+ *
+ * ⚠️ 第 7 项**不依赖保护板**（胎压是独立的一路蓝牙），所以首页连接卡的齿轮
+ *    从 2026-11-10 起**未连接时也显示**，否则没连上板子就进不了这个设置。
  */
 class ConnectionSettingsActivity : AppCompatActivity() {
 
@@ -63,6 +69,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
         setupConnectJumpTab()
         setupCurveDefault()
         setupRecordThresholds()
+        setupRealtimeTpmsDisplay()
     }
 
     /**
@@ -208,5 +215,34 @@ class ConnectionSettingsActivity : AppCompatActivity() {
         save(value)
         val label = RecordThreshold.label(value, default)
         if (edit.text.toString() != label) edit.setText(label)
+    }
+
+    /**
+     * ⭐ **实时卡片胎压显示**（用户 2026-11-10）。
+     *
+     * 三选一：始终显示 / 始终不显示 / 胎压异常时显示。
+     * 作用于实时页的「速度卡内胎压行」与「聚焦时间卡两侧胎压」。
+     *
+     * ⚠️ 顺序必须与 [TpmsDisplayMode.ALL]（= `R.array.realtime_tpms_display_labels`）
+     *    完全一致：0 = always，1 = never，2 = abnormal。
+     *
+     * ⚠️ 与 [setupConnectJumpTab] 同理，用「值没变就不写」挡住 Spinner
+     *    首次 layout 的自动回调，别把默认值当成用户选择写进 SP。
+     */
+    private fun setupRealtimeTpmsDisplay() {
+        val keys = TpmsDisplayMode.ALL
+        val spinner = binding.spinnerRealtimeTpmsDisplay
+        val saved = keys.indexOf(prefs.realtimeTpmsDisplay)
+        spinner.setSelection(if (saved >= 0) saved else 0, false)
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>, view: View?, position: Int, id: Long,
+            ) {
+                val key = keys.getOrElse(position) { TpmsDisplayMode.DEFAULT }
+                if (prefs.realtimeTpmsDisplay != key) prefs.realtimeTpmsDisplay = key
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) = Unit
+        }
     }
 }

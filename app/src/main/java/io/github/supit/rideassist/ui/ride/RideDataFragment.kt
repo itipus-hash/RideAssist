@@ -59,10 +59,13 @@ class RideDataFragment : Fragment() {
                 .setPositiveButton(R.string.confirm) { _, _ ->
                     // ⭐ 只清会话内存。本地阈值 / 设备信息在独立的 device_cache 文件里，
                     //    不会被这个按钮波及（用户 2026-11-08 明确要求）
+                    // ⭐⚠️ 「最大记录」（压差 / 极速 / 电流 / 功率）**不清**
+                    //    （用户 2026-11-10 明确）：只有长按对应记录卡并确认才清。
                     tracker.resetSession()
                     Toast.makeText(
                         requireContext(),
-                        getString(R.string.diag_reset_done) + "（本地阈值 / 设备缓存保留）",
+                        getString(R.string.diag_reset_done) +
+                            getString(R.string.diag_reset_done_extra),
                         Toast.LENGTH_SHORT
                     ).show()
                     // 立即重绘：峰值 / 时长 / 平均值都要归零

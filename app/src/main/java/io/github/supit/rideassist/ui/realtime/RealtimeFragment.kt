@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import io.github.supit.rideassist.util.RecordThreshold
 import io.github.supit.rideassist.util.SpeedDisplay
+import io.github.supit.rideassist.util.TpmsDisplayMode
 import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.LayoutInflater
@@ -248,6 +249,13 @@ class RealtimeFragment : Fragment(), LocationListener {
      * `null` = 未聚焦，四张卡全显示。
      */
     private var focusedCardIndex: Int? = null
+
+    /**
+     * ⭐ 最近一次胎压渲染里**是否有轮胎压越界**（用户 2026-11-10）。
+     *
+     * 「实时卡片胎压显示 = 胎压异常时显示」这一档要用它决定胎压行是否出现。
+     */
+    private var tpmsAbnormal = false
 
     /**
      * 实时页时钟句柄。
@@ -649,13 +657,23 @@ class RealtimeFragment : Fragment(), LocationListener {
         }
     }
 
-    /** 渲染聚焦胎压卡：越界标红（口径与首页一致：<低压 或 >高压） */
+    /**
+     * ⭐ 渲染实时页的胎压（用户 2026-11-10）：
+     * - **速度卡内**的胎压行（2026-11-10 从功率卡挪过来）；
+     * - **聚焦时间卡两侧**的胎压。
+     *
+     * 越界标红，口径与首页一致（<低压 或 >高压）。
+     * 显隐由「实时卡片胎压显示」设置决定，见 [applyTpmsDisplayPolicy]。
+     */
     private fun renderFocusTpms(state: io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.UiState) {
         val b = _binding ?: return
         val prefs = io.github.supit.rideassist.YybmsAppHolder.from(requireContext()).prefs
         val abnormal = ContextCompat.getColor(requireContext(), R.color.abnormal)
         val normal = ContextCompat.getColor(requireContext(), R.color.text_primary)
         val secondary = ContextCompat.getColor(requireContext(), R.color.text_secondary)
+
+        // ⭐ 本次渲染里有没有轮胎压越界（「胎压异常时显示」模式要用）
+        var anyAbnormal = false
 
         fun apply(pos: Int, view: android.widget.TextView) {
             val label = if (pos == io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_FRONT)
@@ -672,22 +690,41 @@ class RealtimeFragment : Fragment(), LocationListener {
                     // ⭐ 格式「前轮 1.34Bar」（用户要求，悬浮窗同款）
                     view.text = "$label " +
                         String.format(java.util.Locale.US, "%.2f", r.bar) + "Bar"
-                    view.setTextColor(
-                        if (r.bar < prefs.tpmsLowBar || r.bar > prefs.tpmsHighBar) abnormal else normal
-                    )
+                    val isAbnormal = r.bar < prefs.tpmsLowBar || r.bar > prefs.tpmsHighBar
+                    if (isAbnormal) anyAbnormal = true
+                    view.setTextColor(if (isAbnormal) abnormal else normal)
                 }
             }
         }
         apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_FRONT, b.tvClockTpmsFront)
         apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_REAR, b.tvClockTpmsRear)
-        // ⭐ 功率卡顶部胎压（用户要求）：非聚焦时显示；聚焦时隐藏（胎压在时间卡两侧已有）
-        if (focusedCardIndex != null) {
-            b.rowPowerTpms.visibility = View.GONE
-        } else {
-            b.rowPowerTpms.visibility = View.VISIBLE
-            apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_FRONT, b.tvPowerTpmsFront)
-            apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_REAR, b.tvPowerTpmsRear)
-        }
+        // ⭐ 速度卡内的胎压行（从功率卡挪过来）
+        apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_FRONT, b.tvSpeedTpmsFront)
+        apply(io.github.supit.rideassist.core.ble.tpms.TpmsMonitor.POS_REAR, b.tvSpeedTpmsRear)
+
+        tpmsAbnormal = anyAbnormal
+        applyTpmsDisplayPolicy()
+    }
+
+    /**
+     * ⭐ **「实时卡片胎压显示」策略**（用户 2026-11-10）：
+     * 始终显示 / 始终不显示 / 胎压异常时显示。
+     *
+     * 同时作用于两处，保证实时页里胎压的出现规则只有**一个**来源：
+     * 1. 速度卡内的胎压行（聚焦时隐藏 —— 聚焦态胎压在时间卡两侧已有）；
+     * 2. 聚焦时间卡两侧的胎压。
+     */
+    private fun applyTpmsDisplayPolicy() {
+        val b = _binding ?: return
+        val prefs = io.github.supit.rideassist.YybmsAppHolder.from(requireContext()).prefs
+        val show = TpmsDisplayMode.shouldShow(prefs.realtimeTpmsDisplay, tpmsAbnormal)
+        // 卡内胎压行：聚焦时隐藏（避免与时间卡两侧重复）
+        b.rowSpeedTpms.visibility =
+            if (show && focusedCardIndex == null) View.VISIBLE else View.GONE
+        // 聚焦时间卡两侧（时间卡本身只在聚焦时可见）
+        val side = if (show) View.VISIBLE else View.GONE
+        b.tvClockTpmsFront.visibility = side
+        b.tvClockTpmsRear.visibility = side
     }
 
     /** 应用显隐状态到实际视图。
@@ -728,6 +765,8 @@ class RealtimeFragment : Fragment(), LocationListener {
         applyFocusCardMargin(focus)
         // ⭐ 两张附属卡都随聚焦目标变化 → 切换聚焦时必须跟着刷新显隐
         renderPeakSection()
+        // ⭐ 胎压行的显隐也依赖聚焦态（聚焦时卡内那行隐藏，胎压在时间卡两侧）
+        applyTpmsDisplayPolicy()
         // ⭐ 需求4：GPS 丢失提示卡只在「聚焦速度卡」时可见。
         // 非聚焦或聚焦其他卡时强制 GONE —— 普通布局下多一张卡会让速度卡高度跳动。
         b.cardGpsLost.visibility =
@@ -925,6 +964,9 @@ class RealtimeFragment : Fragment(), LocationListener {
         //    不打断用户自己双击选中的历史曲线。
         //    隐藏中的预创建 Fragment 不处理，等真正切进来由 onHiddenChanged 负责。
         if (!isHidden) syncCurveModeOnEnter(force = false)
+        // ⭐ 从「连接设置」页返回时，「实时卡片胎压显示」可能刚被改过，
+        //    这里立即按新策略刷新胎压显隐（不用等下一次胎压数据推送）。
+        if (!isHidden) applyTpmsDisplayPolicy()
         if (hasLocationPermission()) {
             startGpsUpdates()
         } else if (!isHidden) {

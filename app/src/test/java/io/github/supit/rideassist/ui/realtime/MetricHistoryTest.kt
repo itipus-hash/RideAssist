@@ -192,15 +192,18 @@ class MetricHistoryTest {
     }
 
     @Test
-    fun `清空会话时四份历史全部清空`() {
+    fun `清空会话时四份历史全部保留`() {
         val t = SessionSpeedTracker()
         startTrip(t)
         current(t, 70f)
         power(t, 1500f)
 
+        // ⭐ 用户 2026-11-10：「清空本次会话」**不能**把最大记录清空，
+        //    只有长按对应记录卡并确认才清（见 clearMetricHistory / clearDiffHistory…）。
         t.resetSession()
-        assertTrue(t.currentHistory.isEmpty())
-        assertTrue(t.powerHistory.isEmpty())
+        assertEquals(1, t.currentHistory.size)
+        assertEquals(1, t.powerHistory.size)
+        // 本用例没喂过压差 / 极速数据，这两份本来就是空的
         assertTrue(t.diffHistory.isEmpty())
         assertTrue(t.topSpeedHistory.isEmpty())
     }

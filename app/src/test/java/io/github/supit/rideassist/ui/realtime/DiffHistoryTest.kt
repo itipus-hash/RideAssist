@@ -175,19 +175,24 @@ class DiffHistoryTest {
     }
 
     @Test
-    fun `清空会话时历史一并清空 且行程编号重新从 1 开始`() {
+    fun `清空会话时历史保留 行程编号继续往后排`() {
         val t = SessionSpeedTracker()
         startTrip(t)
         t.updatePeak(SessionSpeedTracker.CARD_DIFF, 80f, frame(3.900f))
         assertEquals(1, t.diffHistory.size)
+        val firstTripId = t.diffHistory[0].tripId
 
+        // ⭐ 用户 2026-11-10：「清空本次会话」**不能**把最大记录清空，
+        //    只有长按对应记录卡并确认才清。
         t.resetSession()
-        assertTrue(t.diffHistory.isEmpty())
+        assertEquals(1, t.diffHistory.size)
 
+        // 新行程编号必须继续往后走：撞上旧编号会把老记录当成「同行程」替换掉
         startTrip(t)
         t.updatePeak(SessionSpeedTracker.CARD_DIFF, 80f, frame(3.850f))
-        assertEquals(1, t.diffHistory.size)
-        assertEquals(1L, t.diffHistory[0].tripId)
+        assertEquals(2, t.diffHistory.size)
+        assertEquals(firstTripId + 1L, t.diffHistory[0].tripId)
+        assertEquals(firstTripId, t.diffHistory[1].tripId)
     }
 
     @Test
@@ -238,7 +243,8 @@ class DiffHistoryTest {
         assertEquals(snapshot, saved)
 
         t.resetSession()
-        assertEquals("", saved)     // 否则重开 APP 旧记录会「复活」
+        // ⭐ 清空会话不再清历史（用户 2026-11-10），落盘也保持原样
+        assertEquals(snapshot, saved)
     }
 
     @Test

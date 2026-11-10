@@ -3,6 +3,7 @@ package io.github.supit.rideassist.data.prefs
 import android.content.Context
 import androidx.core.content.edit
 import io.github.supit.rideassist.util.RecordThreshold
+import io.github.supit.rideassist.util.TpmsDisplayMode
 
 /**
  * 已保存设备记录与开关状态。
@@ -296,6 +297,30 @@ class AppPrefs(context: Context) {
             )
         }
 
+    // ==================== 实时卡片胎压显示 ====================
+
+    /**
+     * ⭐ **实时页面上的胎压显示策略**（用户 2026-11-10）。
+     *
+     * 三个取值见 [TpmsDisplayMode]：
+     * - `always`（默认）始终显示；
+     * - `never` 始终不显示；
+     * - `abnormal` 胎压异常（低于下限 / 高于上限）时才显示。
+     *
+     * 同时作用于**速度卡内的胎压行**与**聚焦时间卡两侧的胎压**，
+     * 保证实时页里胎压的出现规则只有一个来源。
+     *
+     * ⚠️ 读写都做白名单归一：非法值一律按「始终显示」处理，
+     *    不做旧值兼容（本地只保留最新格式）。
+     */
+    var realtimeTpmsDisplay: String
+        get() = TpmsDisplayMode.normalize(
+            sp.getString(KEY_REALTIME_TPMS_DISPLAY, TpmsDisplayMode.DEFAULT)
+        )
+        set(value) = sp.edit {
+            putString(KEY_REALTIME_TPMS_DISPLAY, TpmsDisplayMode.normalize(value))
+        }
+
     /** ⭐ 悬浮「空格占位」开关：开启后悬浮框显示一条空白行 */
     var overlayShowSpace: Boolean
         get() = sp.getBoolean("overlay_show_space", false)
@@ -431,6 +456,9 @@ class AppPrefs(context: Context) {
         private const val KEY_TOP_SPEED_RECORD_THRESHOLD = "top_speed_record_threshold_kmh"
         private const val KEY_CURRENT_RECORD_THRESHOLD = "current_record_threshold_a"
         private const val KEY_POWER_RECORD_THRESHOLD = "power_record_threshold_w"
+
+        /** 实时卡片胎压显示策略（always / never / abnormal） */
+        private const val KEY_REALTIME_TPMS_DISPLAY = "realtime_tpms_display"
         private const val KEY_LAST_MAC = "last_device_mac"
         private const val KEY_LAST_NAME = "last_device_name"
         private const val KEY_AUTO_CONNECT = "auto_connect_enabled"

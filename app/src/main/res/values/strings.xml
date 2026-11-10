@@ -59,6 +59,21 @@
     <string name="setting_top_speed_threshold_title">极速记录阈值（Km/h）</string>
     <string name="setting_current_threshold_title">电流记录阈值（A）</string>
     <string name="setting_power_threshold_title">功率记录阈值（W）</string>
+
+    <!-- ⭐ 连接设置页第七项（用户 2026-11-10）：实时页面上的胎压显示策略。
+         三选一：始终显示 / 始终不显示 / 胎压异常时显示。
+         同时作用于「速度卡内的胎压行」与「聚焦时间卡两侧的胎压」。
+         ⚠️ 顺序必须与 TpmsDisplayMode.ALL 的顺序一致：
+            0 = always，1 = never，2 = abnormal。 -->
+    <string name="setting_realtime_tpms_display_title">实时卡片胎压显示</string>
+    <string name="tpms_display_always">始终显示</string>
+    <string name="tpms_display_never">始终不显示</string>
+    <string name="tpms_display_abnormal">胎压异常时显示</string>
+    <string-array name="realtime_tpms_display_labels">
+        <item>@string/tpms_display_always</item>
+        <item>@string/tpms_display_never</item>
+        <item>@string/tpms_display_abnormal</item>
+    </string-array>
     <string name="bluetooth_off_title">蓝牙未开启</string>
     <string name="bluetooth_off_msg">本应用需要蓝牙连接彦阳保护板，请先开启蓝牙。</string>
     <string name="perm_required">需要权限</string>
@@ -454,8 +469,9 @@
     <string name="tpms_battery_low">电量不足</string>
     <string name="diag_reset">清空本次会话</string>
     <string name="diag_reset_title">清空本次会话</string>
-    <string name="diag_reset_msg">将清空里程、耗能、回收、骑行时长、峰值记录与全部曲线采样。此操作不可撤销。</string>
+    <string name="diag_reset_msg">将清空里程、耗能、回收、骑行时长、本次峰值与全部曲线采样；压差 / 极速 / 电流 / 功率的最大记录不受影响（需长按对应记录卡清除）。此操作不可撤销。</string>
     <string name="diag_reset_done">已清空</string>
+    <string name="diag_reset_done_extra">（最大记录保留）</string>
     <string name="diag_no_device">未连接设备，暂无实时数据。</string>
 
     <!-- 数据页：电池健康（派生指标） -->

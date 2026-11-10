@@ -1324,9 +1324,15 @@ class SessionSpeedTracker : ViewModel() {
      *
      * 曲线队列也一并清掉 —— 否则会出现「累加器归零但曲线还在」的自相矛盾。
      *
-     * ⚠️ 压差历史 / 极速历史是**跨 APP 重启持久化**的（用户要求一直能显示），
-     *    所以这里必须同步把落盘写成空串；否则用户明明点了清空，
-     *    重开 APP 旧记录又会「复活」。
+     * ⭐⚠️ **四份「最大记录」历史一律不清**（用户 2026-11-10 明确）：
+     * 「点击数据标签页里的 清空本次会话，你不能把最大记录都给清空了啊，
+     * 那些只有长按，选择清空才清空。」
+     * - 压差 / 极速 / 电流 / 功率四份历史只在**长按对应记录卡并确认**时清
+     *   （见 [clearDiffHistory] / [clearTopSpeedHistory] / [clearMetricHistory]）；
+     * - 这里清掉的是「本次会话的曲线 / 峰值 / 里程 / 能耗 / 时长」。
+     *
+     * ⚠️ 因此 [tripSeq] **绝不能归零**：历史还在，新行程必须接着往后排编号。
+     *    归零会让新行程的 tripId 撞上旧记录，把老记录当成「同行程」替换掉。
      */
     fun resetSession() {
         maxSpeed = 0
@@ -1352,15 +1358,15 @@ class SessionSpeedTracker : ViewModel() {
         currentPoints.clear()
         lastDischargeWallMs = 0L
         diffPoints.clear()
-        diffHistory = emptyList()
-        topSpeedHistory = emptyList()
-        currentHistory = emptyList()
-        powerHistory = emptyList()
-        tripSeq = 0L             // ⭐ 会话清空 = 行程计数重新从 1 开始
-        persistDiffHistory()     // ⭐ 同步清掉落盘，避免重开 APP 旧记录「复活」
-        persistTopSpeedHistory() // ⭐ 极速 / 电流 / 功率历史同口径：清空也要落盘
-        currentHistorySink?.invoke(encodeCurrentHistory())
-        powerHistorySink?.invoke(encodePowerHistory())
+        // ⭐ 四份「最大记录」历史**不清**（用户 2026-11-10）：
+        //    只有长按对应卡片并确认才清。这里只保证行程序号继续往上走 ——
+        //    归零会让新行程撞上旧记录的 tripId，把老记录「替换」掉。
+        bumpTripSeq(
+            diffHistory.map { it.tripId } +
+                topSpeedHistory.map { it.tripId } +
+                currentHistory.map { it.tripId } +
+                powerHistory.map { it.tripId },
+        )
         java.util.Arrays.fill(peakRecords, null)
         _peakRevision.update { it + 1 }
         // ⭐ maxSpeed 也归零了，必须通知订阅方（悬浮窗的「极速」），
